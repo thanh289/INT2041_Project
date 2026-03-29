@@ -1,0 +1,13 @@
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel>=7.0.1",
+    "livekit-agents[azure,google,openai,silero,turn-detector]~=1.2",
+    "livekit-plugins-noise-cancellation~=0.2",
+    "openai>=2.5.0",
+    "pydantic>=2.12.3",
+    "pypdf2>=3.0.1",
+    "python-docx>=1.2.0",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
+]

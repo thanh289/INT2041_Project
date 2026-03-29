@@ -1,0 +1,7 @@
+requests
+ipykernel
+python-dotenv
+openai
+pydantic
+PyPDF2
+python-docx
