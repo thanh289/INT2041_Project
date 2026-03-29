@@ -1,4 +1,5 @@
 import os
+import requests
 from logger import logger
 from const import MODEL
 from client import client
@@ -12,6 +13,7 @@ from datetime import datetime, timedelta
 model = MODEL
 downloads_path = DOWNLOADS_PATH
 
+BACKEND_BASE = os.getenv("BACKEND_BASE_URL")
 
 
 def get_next_filename(output_dir: str) -> str:
@@ -159,3 +161,42 @@ def get_nth_file_info(number: int) -> str:
         return recent_files
     else:
         return recent_files[-1]
+    
+def ensure_user_exists(username: str):
+    """
+    Ensure the user exists in backend.
+    If not, auto-register the user.
+    """
+    # Try login first
+    try:
+        resp = requests.post(
+            f"{BACKEND_BASE}/api/account/login",
+            json={"username": username},
+            timeout=5
+        )
+        if resp.status_code == 200:
+            print(f"[INFO] User '{username}' already exists (login OK).")
+            return True
+    except Exception as e:
+        print(f"[WARNING] Login attempt failed: {e}")
+
+    # If login failed → register user
+    print(f"[INFO] User '{username}' does NOT exist. Registering...")
+
+    try:
+        resp = requests.post(
+            f"{BACKEND_BASE}/api/account/register",
+            json={"username": username},
+            timeout=5
+        )
+
+        if resp.status_code >= 200 and resp.status_code < 300:
+            print(f"[SUCCESS] User '{username}' registered.")
+            return True
+
+        print(f"[ERROR] Registration failed: {resp.text}")
+        return False
+
+    except Exception as e:
+        print(f"[ERROR] Failed to register: {e}")
+        return False

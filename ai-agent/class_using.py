@@ -7,7 +7,9 @@ from pydantic import BaseModel, Field
 class RequestType(BaseModel):
     """Router LLM call: Dertermine if user wants to summarize or read raw text."""
     
-    request_type: Literal["read file and summary", "read raw text", "describe image", "normal chat", "unsupported"] = Field(
+    # remove "describe image" and "normal chat" since they will be handled in agent.py
+    # not through process_user_input() in function.py
+    request_type: Literal["read file and summary", "read raw text", "unsupported"] = Field(
         description="Type of request being made"
     ),
     confidence_score: float = Field(description="Confidence score between 0 and 1"),
@@ -55,6 +57,6 @@ class AgentResponse(BaseModel):
         default=None,
         description="Summary text if summarization was performed"
     )
-    intent: Literal["read raw text", "read file and summary", "describe image", "normal chat", "unsupported"] = Field(
+    intent: Literal["read raw text", "read file and summary", "unsupported"] = Field(
         description="The intent understood by the agent"
     )

@@ -88,11 +88,8 @@ def route_request(user_input: str, context: List[Dict]) -> RequestType:
                         - When the user asks to extract, understand, summarize, or explain
                         the content of a file.
                     
-                    3. "describe image"
-                        - When the user wants a description of an image file.
-                    
-                    4. "normal chat"
-                        - When the user is engaging in general conversation without file requests.
+                    3. "unsupported"
+                        - Use this for ANY request that is NOT "read raw text" or "read file and summary".
 
                     Respond ONLY with a JSON object matching the schema:
                     {
@@ -151,12 +148,12 @@ def handle_summarization(text: str, max_words: int = 50) -> Summarize:
     return summary
 
 
-def handle_read_file_or_summary(user_input: str, max_words: int = 50, intent_summary: bool=False) -> FileContent:
+def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, intent_summary: bool=False) -> FileContent:
     """Handle reading a file or summarizing its content."""
     logger.info("Handling read file or summary...")
 
     # Extract file's name from user input
-    route_result = route_request(user_input)
+    # route_result = route_request(user_input)
 
     if route_result.file_name:
         try:
@@ -208,13 +205,16 @@ def handle_read_file_or_summary(user_input: str, max_words: int = 50, intent_sum
 
 
     
-def handle_describe_image(image_path: str, max_words: int) -> str:
+def handle_describe_image(image_path: str, user_prompt: str, max_words: int) -> str:
     """
     Take an image as input and return a description of it, limited to max_words words.
     """
     # Read image và encode base64
     with open(image_path, "rb") as f:
         image_data = base64.b64encode(f.read()).decode("utf-8")
+
+    prompt_text = f"User asked: '{user_prompt}'. Describe this image \
+        in no more than {max_words} words to answer them."
 
     # Call GPT-4o-mini with multimodal input
     response = client.chat.completions.create(
@@ -229,7 +229,7 @@ def handle_describe_image(image_path: str, max_words: int) -> str:
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Describe this image in no more than {max_words} words.",
+                        "text": prompt_text,
                     },
                     {
                         "type": "image_url",
@@ -286,7 +286,7 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
     
     if route_result.request_type == "read raw text" and route_result.confidence_score >= 0.7:
         print("Processing read raw text request...")
-        read_file = handle_read_file_or_summary(user_input, intent_summary=False)
+        read_file = handle_read_file_or_summary(route_result, intent_summary=False)
         return AgentResponse(
             status="done",
             message="Read file successfully.",
@@ -295,29 +295,33 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
         )
     elif route_result.request_type == "read file and summary" and route_result.confidence_score >= 0.7:
         print("Processing read file and summary request...")
-        read_file_and_summary = handle_read_file_or_summary(user_input, intent_summary=True)
+        read_file_and_summary = handle_read_file_or_summary(route_result, intent_summary=True)
         return AgentResponse(
             status="done",
             message="File read and summarized successfully.",
             summary=read_file_and_summary.summary,
             intent="read file and summary"
         )
-    elif route_result.request_type == "normal chat" and route_result.confidence_score >= 0.7:
-        print("Processing normal chat request...")
-        response = handle_normal_chat(user_input, context=context)
-        return AgentResponse(
-            status="done",
-            message=response,
-            intent="normal chat",
-        )
-    elif route_result.request_type == "describe image" and route_result.confidence_score >= 0.7:
-        print("Processing describe image request...")
-        response = handle_describe_image(image_path=route_result.file_name, max_words=50)
-        return AgentResponse(
-            status="done",
-            message=f"Image description: {response}",
-            intent="describe image",
-        )
+    
+    # 2 function below will be handled in agent.py
+    # (describe_camera_view() and normal chat will let openai handle)
+    
+    # elif route_result.request_type == "normal chat" and route_result.confidence_score >= 0.7:
+    #     print("Processing normal chat request...")
+    #     response = handle_normal_chat(user_input, context=context)
+    #     return AgentResponse(
+    #         status="done",
+    #         message=response,
+    #         intent="normal chat",
+    #     )
+    # elif route_result.request_type == "describe image" and route_result.confidence_score >= 0.7:
+    #     print("Processing describe image request...")
+    #     response = handle_describe_image(image_path=route_result.file_name, max_words=50)
+    #     return AgentResponse(
+    #         status="done",
+    #         message=f"Image description: {response}",
+    #         intent="describe image",
+    #     )
     else:
         return AgentResponse(
             status="unsupported",
