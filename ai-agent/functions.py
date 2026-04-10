@@ -10,47 +10,10 @@ from utils import (
     get_nth_file_info,
 )
 import base64
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 model = MODEL
 model_tts = MODEL_TTS
-
-
-def route_request_old(user_input: str) -> RequestType:
-    """Router LLM call to determine if user wants to summarize or read raw text."""
-    logger.info("Routing request...")
-    
-    completion = client.beta.chat.completions.parse(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    """
-                        You are an expert at classifying user requests into two categories:
-                        "read raw text": for reading the raw text of a file when the user does not request a summary.
-                        "read file and summary": for accessing a file and summarizing its content when the user does request a summary.
-                        Respond with a JSON object containing the following fields:
-                        "request_type"
-                        "confidence_score"
-                        "description"
-                        "file_name" (if the user requests reading a specific file)
-                        "nth_file" (if the user requests reading the nth most recent file)
-                    """
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Classify the following request: {user_input}",
-            },
-        ],
-        response_format=RequestType,
-    )
-    result = completion.choices[0].message.parsed
-    logger.info(
-        f"Request routed as: {result.request_type} with confidence: {result.confidence_score}"
-    )
-    return result
 
 
 def route_request(user_input: str, context: List[Dict]) -> RequestType:
@@ -109,7 +72,7 @@ def route_request(user_input: str, context: List[Dict]) -> RequestType:
         response_format=RequestType,
     )
 
-    # ---- Parse output ----
+    # Parse output 
     result = completion.choices[0].message.parsed
     logger.info(
         f"[Router] Classified as: {result.request_type} | confidence: {result.confidence_score}"
@@ -204,45 +167,6 @@ def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, 
 
 
 
-    
-def handle_describe_image(image_path: str, user_prompt: str, max_words: int) -> str:
-    """
-    Take an image as input and return a description of it, limited to max_words words.
-    """
-    # Read image và encode base64
-    with open(image_path, "rb") as f:
-        image_data = base64.b64encode(f.read()).decode("utf-8")
-
-    prompt_text = f"User asked: '{user_prompt}'. Describe this image \
-        in no more than {max_words} words to answer them."
-
-    # Call GPT-4o-mini with multimodal input
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a skilled assistant who describes images concisely, clearly, and naturally.",
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt_text,
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
-                    },
-                ],
-            },
-        ],
-    )
-
-    description = response.choices[0].message.content.strip()
-    return description
-
 def handle_normal_chat(user_input: str, context: List[Dict]) -> str:
     """Handle normal chat requests."""
     logger.info("Handling normal chat...")
@@ -280,6 +204,30 @@ def handle_normal_chat(user_input: str, context: List[Dict]) -> str:
 
     return response_text
 
+def handle_image_description(user_input: str, base64_image: str) -> str:
+    """Handle image description requests."""
+    logger.info("Handling image description...")
+    result = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_input},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+        max_tokens=100
+    )
+    return result.choices[0].message.content
+
+
 def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
     """Process user input and return an appropriate AgentResponse."""
     route_result = route_request(user_input, context=context)
@@ -302,26 +250,6 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
             summary=read_file_and_summary.summary,
             intent="read file and summary"
         )
-    
-    # 2 function below will be handled in agent.py
-    # (describe_camera_view() and normal chat will let openai handle)
-    
-    # elif route_result.request_type == "normal chat" and route_result.confidence_score >= 0.7:
-    #     print("Processing normal chat request...")
-    #     response = handle_normal_chat(user_input, context=context)
-    #     return AgentResponse(
-    #         status="done",
-    #         message=response,
-    #         intent="normal chat",
-    #     )
-    # elif route_result.request_type == "describe image" and route_result.confidence_score >= 0.7:
-    #     print("Processing describe image request...")
-    #     response = handle_describe_image(image_path=route_result.file_name, max_words=50)
-    #     return AgentResponse(
-    #         status="done",
-    #         message=f"Image description: {response}",
-    #         intent="describe image",
-    #     )
     else:
         return AgentResponse(
             status="unsupported",

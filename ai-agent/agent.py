@@ -1,21 +1,18 @@
 import os
-import cv2
-import uuid
 import base64
-import numpy as np
-import tempfile
+import asyncio
+import io
+import json
 from storage import ConversationCache
 from dotenv import load_dotenv
 from datetime import datetime
 from logger import logger
-from const import PAIRS_TO_FLUSH
+from const import PAIRS_TO_FLUSH, LAST_N_PAIRS
 from utils import ensure_user_exists
-from typing import Optional, Dict, Any
-from pydantic import BaseModel
-import asyncio
-import io
 from PIL import Image
-from client import client
+from typing import Optional, Literal
+from functions import process_user_input, handle_image_description
+
 
 from livekit import agents
 from livekit import rtc
@@ -37,10 +34,6 @@ class Assistant(Agent):
     
     def __init__(self, chat_ctx: Optional[ChatContext] = None) -> None:
         super().__init__(
-            # instructions="""You are a helpful voice AI assistant.
-            # You eagerly assist users with their questions by providing information from your extensive knowledge.
-            # Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
-            # You are curious, friendly, and have a sense of humor.""",
             instructions="""
                 You are a helpful voice AI assistant with special tools.
                 You MUST prioritize using a tool over answering directly if a tool is relevant.
@@ -53,6 +46,12 @@ class Assistant(Agent):
                 you MUST call 'describe_camera_view' tool.
 
                 - **Time Tool:** If the user asks for the date or time, call 'get_current_date_and_time'.
+                
+                - **UI/Device Control:** ALWAYS call the 'control_ui_device' tool when the user asks to control a device or UI element, 
+                EVEN IF you think the device is already in that state. Do not assume the current state:
+                    - "turn on/off camera": call 'control_ui_device' (target: "camera", status: "on"/"off").
+                    - "mute/unmute" or "turn on/off microphone": call 'control_ui_device' (target: "microphone", status: "on"/"off").
+                    - "open/close chat" or "show/hide chat": call 'control_ui_device' (target: "chat", status: "on"/"off").
 
                 **CRITICAL RULE:** Do NOT ask the user to "upload a file." 
                 The 'process_file_request' tool handles file access. 
@@ -66,14 +65,9 @@ class Assistant(Agent):
     def update_context(self, username: str):
         if not self.cache: # just initialize once
             self.cache = ConversationCache(username=username, pairs_to_flush=int(PAIRS_TO_FLUSH))
-        new_pairs = self.cache.get_last_n_pairs(5)
+        new_pairs = self.cache.get_last_n_pairs(LAST_N_PAIRS)
         self.context_pairs = new_pairs
 
-    # async def on_transcription(self, ctx: RunContext, transcription: str):
-    #     logger.info(f"[USER] {transcription}")
-
-    # async def on_response_sent(self, ctx: RunContext, response_text: str):
-    #     logger.info(f"[AGENT] {response_text}")
     
     @function_tool
     async def get_current_date_and_time(self, ctx: RunContext) -> str:
@@ -176,62 +170,109 @@ class Assistant(Agent):
 
             # Calling OpenAI Vision
             logger.info("Calling OpenAI Vision API...")
-            result = client.chat.completions.create(
-                model=os.environ.get("OPENAI_MODEL"),
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": user_input},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=100
-            )
-            print("OpenAI response:", result.choices[0].message.content)
-            return result.choices[0].message.content
-
+            return handle_image_description(user_input, base64_image)
         except Exception as e:
             logger.error(f"Error in describe_camera_view: {e}")
             return f"Sorry, an error occurred while analyzing the image: {e}"
     
+    @function_tool
+    async def control_ui_device(
+        self, 
+        ctx: RunContext, 
+        target: Literal["camera", "microphone", "chat"], 
+        status: Literal["on", "off"]
+    ) -> str:
+        """
+        Sends a command to the user's frontend to control UI elements or devices.
+        Use this for:
+        - "turn on/off camera" 
+        - "turn on/off microphone" or "mute/unmute" 
+        - "open/close chat" or "show/hide chat"
+        """
+        logger.info(f"Sending 'control_ui_device' command: {target} -> {status}")
+        
+        try:
+            # Again, take room from RunContext
+            room = get_job_context().room
+
+            # Find participant
+            participant = next(iter(room.remote_participants.values()), None)
+            if not participant:
+                logger.warning("No remote participants found to send RPC.")
+                return "Error: I can't find you in the room to send the command."
+
+            # create payload for the RPC command. 
+            payload = {
+                "type": f"control_{target}", # RPC
+                "status": status
+            }
+            
+            await room.local_participant.publish_data(
+                json.dumps(payload),
+                destination_identities=[participant.identity] # just for this participant
+            )
+            
+            logger.info(f"Successfully sent command to {participant.identity}")
+            return f"Command to turn {target} {status} has been sent."
+
+        except Exception as e:
+            logger.error(f"Error sending RPC 'control_ui_device': {e}")
+            return "An error occurred while trying to send the command."
 
 
 async def entrypoint(ctx: agents.JobContext):
     """Entry point for the agent session. Add history to LLM through ChatContext"""
 
-    # back then 
     username = LOGIN_USERNAME
+
+    async def on_participant_connected(ctx: agents.JobContext, participant: rtc.RemoteParticipant):
+        logger.info(f"Participant {participant.identity} joined the room")
+        temp_cache = ConversationCache(
+            username=participant.identity, pairs_to_flush=int(PAIRS_TO_FLUSH)
+        )
+        history_pairs = temp_cache.get_last_n_pairs(LAST_N_PAIRS)
+        initial_ctx = ChatContext()
+        message_count = 0
+        for pair in history_pairs:
+            if pair.get("user"):
+                initial_ctx.add_message(role="user", content=pair["user"])
+                message_count += 1
+            if pair.get("bot"):
+                initial_ctx.add_message(role="assistant", content=pair["bot"])
+                message_count += 1
+        logger.info(f"Loaded {message_count} messages into agent's ChatContext.")
+        assistant.cache = temp_cache
+        assistant.context_pairs = history_pairs
+
+        # Nạp vào agent
+        await assistant.update_chat_ctx(initial_ctx)
+        assistant.update_context(assistant.cache.username)
+
+    def on_participant_disconnected(participant: rtc.RemoteParticipant):
+        logger.info(f"Participant disconnected: {participant.identity}")
+        if (assistant.cache):
+            assistant.cache.flush()   
+
+    ctx.add_participant_entrypoint(entrypoint_fnc=on_participant_connected)
+    ctx.room.on("participant_disconnected", on_participant_disconnected)
+
+    if (username is None) or (username.strip() == ""):
+        logger.error("AGENT_LOGIN_USERNAME is not set in environment variables.")
+        return
+    
+
     if not ensure_user_exists(username):
         logger.error(
             "Cannot initialize assistant because user registration/login failed."
         )
     
-    temp_cache = ConversationCache(
-        username=username, pairs_to_flush=int(PAIRS_TO_FLUSH)
-    )
-    history_pairs = temp_cache.get_last_n_pairs(5)
+    assistant = Assistant()
 
-    initial_ctx = ChatContext()
-    message_count = 0
-    for pair in history_pairs:
-        if pair.get("user"):
-            initial_ctx.add_message(role="user", content=pair["user"])
-            message_count += 1
-        if pair.get("bot"):
-            initial_ctx.add_message(role="assistant", content=pair["bot"])
-            message_count += 1
-    logger.info(f"Loaded {message_count} messages into agent's ChatContext.")
-
-    assistant = Assistant(chat_ctx=initial_ctx)
-    assistant.cache = temp_cache
-    assistant.context_pairs = history_pairs
+    chatgpt_api_key = os.environ.get("OPENAI_API_KEY")
+    if not chatgpt_api_key:
+        logger.error("OPENAI_API_KEY is not set in environment variables.")
+        return
+    chatgpt_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
     session = AgentSession(
         stt=azure.STT(
@@ -239,8 +280,8 @@ async def entrypoint(ctx: agents.JobContext):
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
         llm=openai.LLM(
-            api_key=os.environ.get("OPENAI_API_KEY"),
-            model=os.environ.get("OPENAI_MODEL"),
+            api_key=chatgpt_api_key,
+            model=chatgpt_model,
         ),
         tts=azure.TTS(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
@@ -253,11 +294,14 @@ async def entrypoint(ctx: agents.JobContext):
     def on_conversation_item_added(event: ConversationItemAddedEvent):
         # async without blocking main thread
         async def async_handler():
+            if assistant.cache is None:
+                logger.warning("Conversation cache is not initialized yet; skipping persistence.")
+                return
+            
             role = event.item.role
             text_contents = event.item.text_content
-            print(
-                f"Conversation item added from {role}: {text_contents}. interrupted: {event.item.interrupted}"
-            )
+            print(f"Conversation item added from {role}: {text_contents}. \
+                  interrupted: {event.item.interrupted}")
 
             new_ctx = assistant.chat_ctx.copy()
 
@@ -287,10 +331,10 @@ async def entrypoint(ctx: agents.JobContext):
 
         asyncio.create_task(async_handler())
     
-    @session.on("close")
-    def on_session_close():
-        logger.info("Session is closing.")
-        assistant.cache.flush()
+    # @session.on("close")
+    # def on_session_close():
+    #     logger.info("Session is closing.")
+    #     assistant.cache.flush()
 
 
     await session.start(
@@ -304,8 +348,3 @@ async def entrypoint(ctx: agents.JobContext):
 
     # username = ctx.room.local_participant.identity
     # assistant.update_context(username=username)
-
-
-
-if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
