@@ -5,16 +5,18 @@ from typing import List, Dict, Type, TypeVar
 from pydantic import BaseModel
 from google.genai import types
 from groq import Groq
+import azure.cognitiveservices.speech as speechsdk
 
 from class_using import RequestType, Summarize, TTS, AgentResponse, FileContent
 from logger import logger
-from const import MODEL
+from const import MODEL, OUTPUT_DIR
 from client import client
 from utils import (
     return_text_to_speech,
     find_file_in_downloads,
     read_file_content,
     get_nth_file_info,
+    get_next_filename,
 )
 
 model = MODEL
@@ -220,6 +222,52 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
     )
 
 
-def handle_tts(text: str) -> TTS:
+def handle_tts(text: str, voice: str = "en-US-AriaNeural", output_dir: str = OUTPUT_DIR) -> TTS:
+    """
+    Convert text to speech using Azure TTS and save as .mp3.
+    Returns a TTS object with the path to the saved audio file.
+    Falls back gracefully if Azure credentials are missing.
+    """
     logger.info("Preparing text for TTS...")
-    return TTS(raw_text=return_text_to_speech(text), audio_direction=None)
+    clean_text = return_text_to_speech(text)
+
+    speech_key = os.getenv("AZURE_SPEECH_KEY")
+    speech_region = os.getenv("AZURE_SPEECH_REGION")
+
+    if not speech_key or not speech_region:
+        logger.warning("AZURE_SPEECH_KEY or AZURE_SPEECH_REGION not set — skipping synthesis.")
+        return TTS(raw_text=clean_text, audio_direction=None)
+
+    output_path = get_next_filename(output_dir)
+
+    try:
+        speech_config = speechsdk.SpeechConfig(
+            subscription=speech_key,
+            region=speech_region,
+        )
+        speech_config.speech_synthesis_voice_name = voice
+        speech_config.set_speech_synthesis_output_format(
+            speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3
+        )
+
+        audio_config = speechsdk.audio.AudioOutputConfig(filename=output_path)
+        synthesizer = speechsdk.SpeechSynthesizer(
+            speech_config=speech_config,
+            audio_config=audio_config,
+        )
+
+        result = synthesizer.speak_text_async(clean_text).get()
+
+        if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+            logger.info(f"TTS audio saved to: {output_path}")
+            return TTS(raw_text=clean_text, audio_direction=output_path)
+
+        if result.reason == speechsdk.ResultReason.Canceled:
+            details = result.cancellation_details
+            logger.error(f"TTS canceled: {details.reason} — {details.error_details}")
+            return TTS(raw_text=clean_text, audio_direction=None)
+
+    except Exception as e:
+        logger.error(f"TTS synthesis failed: {e}")
+
+    return TTS(raw_text=clean_text, audio_direction=None)
