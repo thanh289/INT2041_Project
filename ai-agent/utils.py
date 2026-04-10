@@ -7,7 +7,7 @@ from docx import Document
 from datetime import datetime, timedelta
 
 BACKEND_BASE = os.getenv("BACKEND_BASE_URL")
-
+ENABLE_BACKEND = os.getenv("ENABLE_BACKEND", "true").lower() == "true"
 
 def get_next_filename(output_dir: str) -> str:
     """
@@ -43,6 +43,25 @@ def find_file_in_downloads(filename: str) -> str:
     raise FileNotFoundError(f"File '{filename}' not found in Downloads folder.")
 
 
+def _deduplicate_lines(text: str) -> str:
+    """
+    Remove consecutive duplicate lines from extracted PDF text.
+    PDFs sometimes embed the same text multiple times in their internal layer structure.
+    """
+    lines = text.splitlines()
+    seen = []
+    prev = None
+    for line in lines:
+        stripped = line.strip()
+        # Skip if this line is identical to the previous non-empty line
+        if stripped and stripped == prev:
+            continue
+        seen.append(line)
+        if stripped:
+            prev = stripped
+    return "\n".join(seen)
+
+
 def read_file_content(filepath: str, max_chars: int = 8000) -> str:
     """
     Read text file safely (supports .txt, .md, .csv, .json, .pdf, .docx).
@@ -69,7 +88,7 @@ def read_file_content(filepath: str, max_chars: int = 8000) -> str:
                     break
         except Exception as e:
             raise ValueError(f"Error reading PDF: {e}")
-        return text_content.strip()
+        return _deduplicate_lines(text_content.strip())
 
     # --- Handle DOCX ---
     if ext == ".docx":
@@ -141,6 +160,10 @@ def ensure_user_exists(username: str):
     Ensure the user exists in backend.
     If not, auto-register the user.
     """
+    if not ENABLE_BACKEND or not BACKEND_BASE:
+        print("[INFO] Backend disabled. Skip user existence check.")
+        return True
+    
     # Try login first
     try:
         resp = requests.post(

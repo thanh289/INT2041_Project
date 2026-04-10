@@ -230,7 +230,12 @@ async def entrypoint(ctx: agents.JobContext):
         temp_cache = ConversationCache(
             username=participant.identity, pairs_to_flush=int(PAIRS_TO_FLUSH)
         )
-        history_pairs = temp_cache.get_last_n_pairs(LAST_N_PAIRS)
+        try:
+            history_pairs = temp_cache.get_last_n_pairs(LAST_N_PAIRS)
+        except Exception as e:
+            logger.warning(f"Cannot load history from backend: {e}")
+            history_pairs = []
+            
         initial_ctx = ChatContext()
         message_count = 0
         for pair in history_pairs:

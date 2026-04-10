@@ -1,7 +1,15 @@
 requests
 ipykernel
 python-dotenv
-openai
 pydantic
 PyPDF2
 python-docx
+pillow
+google-genai
+groq
+livekit-agents~=1.4
+livekit
+livekit-plugins-azure
+livekit-plugins-silero
+livekit-plugins-noise-cancellation~=0.2
+livekit-plugins-google

@@ -11,8 +11,8 @@ class RequestType(BaseModel):
     # not through process_user_input() in function.py
     request_type: Literal["read file and summary", "read raw text", "unsupported"] = Field(
         description="Type of request being made"
-    ),
-    confidence_score: float = Field(description="Confidence score between 0 and 1"),
+    )
+    confidence_score: float = Field(description="Confidence score between 0 and 1")
     description: str = Field(description="Cleaned description of the request")
     file_name: Optional[str] = Field(description="Name of the file if applicable")  # if client request involves a file, extract the file name
     nth_file: Optional[int] = Field(description="Nth file if applicable")           # if client request involves a file but does not specify the name, extract the nth file in the Downloads folder (e.g. first file, second file, etc.)

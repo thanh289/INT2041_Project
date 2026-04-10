@@ -11,7 +11,7 @@ load_dotenv()
 # New version: we keep an in-memory cache of messages, and only flush to backend when we have accumulated a certain number of pairs (user+bot). 
 # This reduces the number of API calls and allows us to keep more context in memory for the agent to use.
 
-
+ENABLE_BACKEND = os.getenv("ENABLE_BACKEND", "true").lower() == "true"
 BACKEND_BASE = os.getenv("BACKEND_BASE_URL")  # chỉnh nếu khác
 LOGIN_USERNAME = os.getenv("AGENT_LOGIN_USERNAME")  # tạo account này trong backend
 # Nếu backend yêu cầu password, chỉnh code và DTO. (current backend LoginDto chỉ has Username)
@@ -61,6 +61,8 @@ class ConversationCache:
         Fetch conversation history (all messages) from backend for the logged-in user.
         Returns list of message DTOs (MessageDto) or [].
         """
+        if not ENABLE_BACKEND or not BACKEND_BASE:
+            return []
         limit = 2*self.pairs_to_flush
         url = f"{BACKEND_BASE}/api/conversation-history?limit={limit}"
         resp = self.session.get(url, headers=self._auth_headers(), timeout=10)
@@ -75,6 +77,8 @@ class ConversationCache:
         Send list of CreateMessageDto to backend. Returns created messages.
         Each message: { "senderType": int, "content": str, "createdAt": "2025-11-15T..."}
         """
+        if not ENABLE_BACKEND or not BACKEND_BASE:
+            return []
         if not messages:
             return []
         url = f"{BACKEND_BASE}/api/messages"

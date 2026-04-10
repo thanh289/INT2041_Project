@@ -1,8 +1,10 @@
 import base64
+import os
 from typing import List, Dict, Type, TypeVar
 
 from pydantic import BaseModel
 from google.genai import types
+from groq import Groq
 
 from class_using import RequestType, Summarize, TTS, AgentResponse, FileContent
 from logger import logger
@@ -18,93 +20,99 @@ from utils import (
 model = MODEL
 T = TypeVar("T", bound=BaseModel)
 
+# ---------------------------------------------------------------------------
+# Groq client — handles ALL text tasks (routing + summarization)
+# Gemini is reserved for image description only (multimodal).
+# ---------------------------------------------------------------------------
 
-def _generate_structured_output(
-    prompt: str,
-    schema_model: Type[T],
-    system_instruction: str,
-) -> T:
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config={
-            "system_instruction": system_instruction,
-            "response_mime_type": "application/json",
-            "response_json_schema": schema_model.model_json_schema(),
-        },
-    )
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
-    if not getattr(response, "text", None):
-        raise ValueError("Gemini returned empty structured output.")
 
-    return schema_model.model_validate_json(response.text)
+def _groq_generate(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
+    """Call Groq and return plain text. Set json_mode=True for structured JSON output."""
+    kwargs = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.0 if json_mode else 0.3,
+    }
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
 
+    response = groq_client.chat.completions.create(**kwargs)
+    return (response.choices[0].message.content or "").strip()
+
+
+# ---------------------------------------------------------------------------
+# Core functions
+# ---------------------------------------------------------------------------
 
 def route_request(user_input: str, context: List[Dict]) -> RequestType:
-    logger.info("Routing request with context...")
+    """Classify the user request using Groq."""
+    logger.info("Routing request via Groq...")
 
     context_block = ""
     if context:
         for pair in context:
-            user_msg = pair.get("user", "")
-            bot_msg = pair.get("bot", "")
-            context_block += f"User: {user_msg}\nAssistant: {bot_msg}\n"
+            context_block += f"User: {pair.get('user', '')}\nAssistant: {pair.get('bot', '')}\n"
 
-    full_prompt = (
-        "Here is the conversation history:\n"
-        f"{context_block}\n"
-        f"Now classify this new user request: {user_input}"
+    system_prompt = """
+        You are an expert at classifying user requests. Return ONLY a valid JSON object — no markdown, no explanation.
+
+        Classify into exactly one request_type:
+        - "read raw text": user wants to view a file's raw content, NOT a summary.
+        - "read file and summary": user wants to summarize, understand, or extract info from a file.
+        - "unsupported": anything NOT about reading or summarizing a file.
+
+        Also extract:
+        - file_name: exact filename if mentioned (e.g. "report.pdf"), else null.
+        - nth_file: integer if user says "first", "second", "latest" (1=most recent), else null.
+        - confidence_score: float 0.0-1.0.
+        - description: one-sentence description of the request.
+
+        Return ONLY this structure:
+        {"request_type": "...", "confidence_score": 0.95, "description": "...", "file_name": null, "nth_file": null}
+        """.strip()
+
+    raw = _groq_generate(
+        system_prompt=system_prompt,
+        user_prompt=f"Conversation history:\n{context_block}\nClassify this request: {user_input}",
+        json_mode=True,
     )
 
-    return _generate_structured_output(
-        prompt=full_prompt,
-        schema_model=RequestType,
-        system_instruction="""
-            You are an expert at classifying user requests into three categories:
-
-            1. "read raw text"
-            - When the user wants to view a file's raw content.
-            - NOT requesting any summary.
-
-            2. "read file and summary"
-            - When the user asks to extract, understand, summarize, or explain the content of a file.
-
-            3. "unsupported"
-            - Use this for ANY request that is NOT "read raw text" or "read file and summary".
-
-            Return only valid JSON matching the provided schema.
-            """.strip(),
-    )
+    try:
+        return RequestType.model_validate_json(raw)
+    except Exception as e:
+        logger.error(f"Groq routing parse error: {e}. Raw: {raw}")
+        return RequestType(
+            request_type="unsupported",
+            confidence_score=0.0,
+            description="Failed to parse routing response.",
+            file_name=None,
+            nth_file=None,
+        )
 
 
 def handle_summarization(text: str, max_words: int = 50) -> Summarize:
-    logger.info("Handling summarization...")
+    """Summarize text using Groq."""
+    logger.info("Handling summarization via Groq...")
 
-    prompt = f"""
-        Summarize the following text in about {max_words} words.
-
-        Text:
-        {text}
-
-        Important:
-        - Summarize only the file/text content.
-        - Do not repeat the request.
-        - Keep it concise and informative.
-        """.strip()
-
-    result = _generate_structured_output(
-        prompt=prompt,
-        schema_model=Summarize,
-        system_instruction="You are a helpful assistant that summarizes text.",
+    summary_text = _groq_generate(
+        system_prompt="You are a helpful assistant that summarizes text concisely. Return only the summary, nothing else.",
+        user_prompt=f"Summarize the following text in about {max_words} words:\n\n{text}",
     )
-    result.raw_text = text
-    return result
+
+    return Summarize(raw_text=text, summary=summary_text)
 
 
-def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, intent_summary: bool=False) -> FileContent:
+def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, intent_summary: bool = False) -> FileContent:
     """Handle reading a file or summarizing its content."""
     logger.info("Handling read file or summary...")
 
+    # --- Case 1: specific file name ---
     if route_result.file_name:
         try:
             filepath = find_file_in_downloads(route_result.file_name)
@@ -113,21 +121,12 @@ def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, 
         except Exception as e:
             logger.error(f"Error reading file: {e}")
             raise
-
         if intent_summary:
-            summary = handle_summarization(file_content, max_words=max_words)
-            return FileContent(
-                file_name=route_result.file_name,
-                content=file_content,
-                summary=summary
-            )
+            return FileContent(file_name=route_result.file_name, content=file_content,
+                               summary=handle_summarization(file_content, max_words))
+        return FileContent(file_name=route_result.file_name, content=file_content, summary=None)
 
-        return FileContent(
-            file_name=route_result.file_name,
-            content=file_content,
-            summary=None,
-        )
-
+    # --- Case 2: nth file (e.g. "first pdf", "second file") ---
     if route_result.nth_file:
         try:
             nth_file_info = get_nth_file_info(route_result.nth_file)
@@ -138,67 +137,56 @@ def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, 
         except Exception as e:
             logger.error(f"Error reading nth file: {e}")
             raise
-
         if intent_summary:
-            summary = handle_summarization(file_content, max_words=max_words)
-            return FileContent(
-                file_name=file_name,
-                content=file_content,
-                summary=summary
-            )
+            return FileContent(file_name=file_name, content=file_content,
+                               summary=handle_summarization(file_content, max_words))
+        return FileContent(file_name=file_name, content=file_content, summary=None)
 
-        return FileContent(
-            file_name=file_name,
-            content=file_content,
-            summary=None,
-        )
+    # --- Case 3: "latest"/"recent"/unspecified → grab most recent PDF ---
+    logger.info("No file_name or nth_file. Falling back to latest PDF in Downloads...")
+    try:
+        latest = get_nth_file_info(1)  # 1 = most recent
+        filepath = latest["full_path"]
+        file_name = latest["file_name"]
+        print(f"Found latest file at: {filepath}")
+        file_content = read_file_content(filepath)
+    except Exception as e:
+        logger.error(f"Error reading latest file: {e}")
+        raise ValueError(f"Could not find any PDF in Downloads folder: {e}")
 
-    raise ValueError("No file_name or nth_file detected in route result.")
+    if intent_summary:
+        return FileContent(file_name=file_name, content=file_content,
+                           summary=handle_summarization(file_content, max_words))
+    return FileContent(file_name=file_name, content=file_content, summary=None)
 
 
 def handle_normal_chat(user_input: str, context: List[Dict]) -> str:
-    logger.info("Handling normal chat...")
+    """General chat via Groq."""
+    logger.info("Handling normal chat via Groq...")
 
     context_block = ""
     if context:
         for pair in context:
-            user_msg = pair.get("user", "")
-            bot_msg = pair.get("bot", "")
-            context_block += f"User: {user_msg}\nAssistant: {bot_msg}\n"
+            context_block += f"User: {pair.get('user', '')}\nAssistant: {pair.get('bot', '')}\n"
 
-    full_prompt = (
-        "Here is the conversation history:\n"
-        f"{context_block}\n"
-        f"Now respond to this new user request: {user_input}"
+    return _groq_generate(
+        system_prompt="You are a helpful and friendly assistant.",
+        user_prompt=f"Conversation history:\n{context_block}\nRespond to: {user_input}",
     )
-
-    response = client.models.generate_content(
-        model=model,
-        contents=full_prompt,
-        config={
-            "system_instruction": "You are a helpful and friendly assistant."
-        },
-    )
-
-    return (response.text or "").strip()
 
 
 def handle_image_description(user_input: str, base64_image: str) -> str:
-    logger.info("Handling image description...")
+    """Describe an image using Gemini (only task that requires Gemini)."""
+    logger.info("Handling image description via Gemini...")
 
     image_bytes = base64.b64decode(base64_image)
-
     response = client.models.generate_content(
         model=model,
         contents=[
-            types.Part.from_bytes(
-                data=image_bytes,
-                mime_type="image/jpeg",
-            ),
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
             user_input,
         ],
     )
-
     return (response.text or "").strip()
 
 
@@ -217,11 +205,11 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
 
     if route_result.request_type == "read file and summary" and route_result.confidence_score >= 0.7:
         print("Processing read file and summary request...")
-        read_file_and_summary = handle_read_file_or_summary(route_result, intent_summary=True)
+        result = handle_read_file_or_summary(route_result, intent_summary=True)
         return AgentResponse(
             status="done",
             message="File read and summarized successfully.",
-            summary=read_file_and_summary.summary,
+            summary=result.summary,
             intent="read file and summary"
         )
 
@@ -234,5 +222,4 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
 
 def handle_tts(text: str) -> TTS:
     logger.info("Preparing text for TTS...")
-    cleaned_text = return_text_to_speech(text)
-    return TTS(raw_text=cleaned_text, audio_direction=None)
+    return TTS(raw_text=return_text_to_speech(text), audio_direction=None)

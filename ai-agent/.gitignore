@@ -4,3 +4,4 @@ __pycache__/
 *.jpg
 test_*.py
 test.py
+flox.txt
