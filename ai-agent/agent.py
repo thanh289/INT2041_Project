@@ -17,7 +17,7 @@ from functions import process_user_input, handle_image_description
 from livekit import agents
 from livekit import rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, RunContext, get_job_context
-from livekit.plugins import noise_cancellation, silero, azure, google, openai
+from livekit.plugins import noise_cancellation, silero, azure, google
 from livekit.agents.llm import function_tool
 from livekit.agents import ConversationItemAddedEvent
 from livekit.agents.llm import ImageContent, AudioContent
@@ -268,26 +268,27 @@ async def entrypoint(ctx: agents.JobContext):
     
     assistant = Assistant()
 
-    chatgpt_api_key = os.environ.get("OPENAI_API_KEY")
-    if not chatgpt_api_key:
-        logger.error("OPENAI_API_KEY is not set in environment variables.")
+    google_api_key = os.environ.get("GOOGLE_API_KEY")
+    if not google_api_key:
+        logger.error("GOOGLE_API_KEY is not set in environment variables.")
         return
-    chatgpt_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+    google_model = os.environ.get("GOOGLE_MODEL", "gemini-2.5-flash")
 
     session = AgentSession(
         stt=azure.STT(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        llm=openai.LLM(
-            api_key=chatgpt_api_key,
-            model=chatgpt_model,
+        llm=google.LLM(
+            api_key=google_api_key,
+            model=google_model,
         ),
         tts=azure.TTS(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        vad=silero.VAD.load(min_silence_duration=2.0), # Agent wait for 2 seconds of silence and consider the user has finished speaking before responding
+        vad=silero.VAD.load(min_silence_duration=2.0),
     )
 
     @session.on("conversation_item_added")

@@ -1,17 +1,10 @@
 import os
 import requests
 from logger import logger
-from const import MODEL
-from client import client
 from const import DOWNLOADS_PATH
 from PyPDF2 import PdfReader
 from docx import Document
 from datetime import datetime, timedelta
-
-
-
-model = MODEL
-downloads_path = DOWNLOADS_PATH
 
 BACKEND_BASE = os.getenv("BACKEND_BASE_URL")
 
@@ -26,11 +19,7 @@ def get_next_filename(output_dir: str) -> str:
         os.makedirs(output_dir)
         logger.info(f"Make dir: {output_dir}")
 
-    # Lọc file .mp3 và lấy phần số
-    existing_files = [
-        f for f in os.listdir(output_dir)
-        if f.endswith(".mp3")
-    ]
+    existing_files = [f for f in os.listdir(output_dir) if f.endswith(".mp3")]
 
     if existing_files:
         max_num = max(int(f[:-4]) for f in existing_files)
@@ -38,35 +27,21 @@ def get_next_filename(output_dir: str) -> str:
         max_num = 0
 
     next_num = max_num + 1
-    next_filename = os.path.join(output_dir, f"{next_num}.mp3")
-    return next_filename
+    return os.path.join(output_dir, f"{next_num}.mp3")
+
 
 def return_text_to_speech(text: str) -> str:
-    """Remove the request part from the text."""
-    logger.info("Extracting text to be converted to speech...")
-    
-    prompt = (
-        f"""Remove any request part and return only the text to be read from the following input:\n\n{text}"""
-    )
-    completion = client.beta.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that removes the request parts."},
-            {"role": "user", "content": prompt},
-        ]
-    )
-    return completion.choices[0].message.content.strip()
+    logger.info("Preparing text for speech...")
+    return text.strip()
+
 
 def find_file_in_downloads(filename: str) -> str:
-    """
-    Search for a file by name in the user's Downloads folder.
-    Returns the full path if found, otherwise raises FileNotFoundError.
-    """
-    for root, _, files in os.walk(downloads_path):
+    for root, _, files in os.walk(DOWNLOADS_PATH):
         for f in files:
             if f.lower() == filename.lower():
                 return os.path.join(root, f)
     raise FileNotFoundError(f"File '{filename}' not found in Downloads folder.")
+
 
 def read_file_content(filepath: str, max_chars: int = 8000) -> str:
     """
@@ -115,6 +90,7 @@ def read_file_content(filepath: str, max_chars: int = 8000) -> str:
         content = f.read(max_chars)
     return content.strip()
 
+
 def find_recent_pdfs_in_downloads(days: int = 7):
     """
     Find all PDF files in the Downloads folder within the last 'days' days.
@@ -145,23 +121,21 @@ def find_recent_pdfs_in_downloads(days: int = 7):
                         })
                 except Exception as e:
                     print(f"Error while accessing {file_path}: {e}")
-    recent_files.sort(key=lambda x: x["modified_time"], reverse=True)
 
+    recent_files.sort(key=lambda x: x["modified_time"], reverse=True)
     return recent_files
 
+
 def get_nth_file_info(number: int) -> str:
-    """
-    Get the nth file info in the DOWNLOADS_PATH directory.
-    Wrapper of find_recent_pdfs_in_downloads()
-    """
     recent_files = find_recent_pdfs_in_downloads()
     if 0 < number <= len(recent_files):
         return recent_files[number - 1]
-    elif(number == 0):
+    elif number == 0:
         return recent_files
     else:
         return recent_files[-1]
-    
+
+
 def ensure_user_exists(username: str):
     """
     Ensure the user exists in backend.
@@ -190,7 +164,7 @@ def ensure_user_exists(username: str):
             timeout=5
         )
 
-        if resp.status_code >= 200 and resp.status_code < 300:
+        if 200 <= resp.status_code < 300:
             print(f"[SUCCESS] User '{username}' registered.")
             return True
 
