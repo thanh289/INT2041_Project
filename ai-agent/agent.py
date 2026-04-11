@@ -17,7 +17,7 @@ from functions import process_user_input, handle_image_description
 from livekit import agents
 from livekit import rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, RunContext, get_job_context
-from livekit.plugins import noise_cancellation, silero, azure, google
+from livekit.plugins import noise_cancellation, silero, azure, groq
 from livekit.agents.llm import function_tool
 from livekit.agents import ConversationItemAddedEvent
 from livekit.agents.llm import ImageContent, AudioContent
@@ -219,7 +219,22 @@ class Assistant(Agent):
             logger.error(f"Error sending RPC 'control_ui_device': {e}")
             return "An error occurred while trying to send the command."
 
+# Phase 1 — Startup (runs once when the agent process boots)
+    # entrypoint() is called by LiveKit. It registers the user with the backend, creates an empty Assistant object, 
+    # and starts the AgentSession wiring together Groq, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
 
+# Phase 2 — Participant joins (runs once per user connection)
+    # When a user connects to the LiveKit room, on_participant_connected fires. 
+    # It creates a ConversationCache for that user, fetches their past conversation history from the backend, 
+    # and injects it into a ChatContext so Groq starts the conversation already knowing what was said before.
+
+# Phase 3 — Conversation loop (runs every time the user speaks)
+    # Azure STT transcribes the user's voice. Groq reads the transcript and decides: 
+    # does this need a tool, or can I answer directly? If a tool is needed (file, camera, time, UI control),
+    # it calls it and feeds the result back to itself. Either way, Groq produces a text response which Azure TTS speaks back to the user.
+# Phase 4 — Persistence (after every response)
+    # on_conversation_item_added saves both the user message and agent reply to ConversationCache. 
+    # Once 5 pairs accumulate, it flushes them to the backend — then the loop waits for the next thing the user says.
 async def entrypoint(ctx: agents.JobContext):
     """Entry point for the agent session. Add history to LLM through ChatContext"""
 
@@ -273,21 +288,19 @@ async def entrypoint(ctx: agents.JobContext):
     
     assistant = Assistant()
 
-    google_api_key = os.environ.get("GOOGLE_API_KEY")
-    if not google_api_key:
-        logger.error("GOOGLE_API_KEY is not set in environment variables.")
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    if not groq_api_key:
+        logger.error("GROQ_API_KEY is not set in environment variables.")
         return
-
-    google_model = os.environ.get("GOOGLE_MODEL", "gemini-2.5-flash")
 
     session = AgentSession(
         stt=azure.STT(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        llm=google.LLM(
-            api_key=google_api_key,
-            model=google_model,
+        llm=groq.LLM(
+            api_key=groq_api_key,
+            model=os.environ.get("GROQ_AGENT_MODEL", "llama-3.3-70b-versatile"),
         ),
         tts=azure.TTS(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),

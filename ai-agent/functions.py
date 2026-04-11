@@ -178,7 +178,7 @@ def handle_normal_chat(user_input: str, context: List[Dict]) -> str:
 
 
 def handle_image_description(user_input: str, base64_image: str) -> str:
-    """Describe an image using Gemini (only task that requires Gemini)."""
+    """Describe an image using Gemini."""
     logger.info("Handling image description via Gemini...")
 
     image_bytes = base64.b64decode(base64_image)
