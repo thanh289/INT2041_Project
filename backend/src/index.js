@@ -8,5 +8,5 @@ const app = createApp(config);
 
 app.listen(config.port, () => {
   // eslint-disable-next-line no-console
-  console.log(`[backend-js] listening on http://localhost:${config.port}`);
+  console.log(`[backend] listening on http://localhost:${config.port}`);
 });

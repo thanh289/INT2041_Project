@@ -16,12 +16,12 @@ SQLite (file-based) is used for storage.
 - DB file default: `data/app.sqlite`
 - Schema: `schema.sql`
 
-Configured via `SQLITE_FILE` (relative to `backend-js/` or absolute path).
+Configured via `SQLITE_FILE` (relative to `backend/` or absolute path).
 
 ## Run (PowerShell)
 
 ```powershell
-cd backend-js
+cd backend
 copy .env.example .env
 npm install
 npm run dev
