@@ -1,12 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import LiveKitRoomWrapper from "@/components/LiveKitRoomWrapper";
 
 export default function Home() {
   const [connect, setConnect] = useState(false);
-  const [username] = useState(`User_${Math.floor(Math.random() * 10000)}`);
+  const [username, setUsername] = useState<string>("");
   const roomName = "accessibility_hub"; 
+
+  useEffect(() => {
+    let storedUser = localStorage.getItem("accessibility_username");
+    if (!storedUser) {
+      storedUser = `User_${Math.floor(Math.random() * 100000)}`;
+      localStorage.setItem("accessibility_username", storedUser);
+    }
+    setUsername(storedUser);
+  }, []);
+
+  if (!username) return null;
 
   if (connect) {
     return (

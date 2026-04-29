@@ -242,6 +242,11 @@ async def entrypoint(ctx: agents.JobContext):
 
     async def on_participant_connected(ctx: agents.JobContext, participant: rtc.RemoteParticipant):
         logger.info(f"Participant {participant.identity} joined the room")
+        
+        # Đảm bảo user (frontend) đã tồn tại trong DB để có thể đăng nhập/lưu lịch sử
+        if not ensure_user_exists(participant.identity):
+            logger.warning(f"Could not register or login participant {participant.identity}.")
+
         temp_cache = ConversationCache(
             username=participant.identity, pairs_to_flush=int(PAIRS_TO_FLUSH)
         )
