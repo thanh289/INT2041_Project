@@ -38,7 +38,13 @@ class Assistant(Agent):
                 You are a helpful voice AI assistant with special tools.
                 You MUST prioritize using a tool over answering directly if a tool is relevant.
                 When a tool returns a camera result, answer directly using that result.
-                ever output raw tool calls such as <function=...>, JSON tool syntax, or XML-like tags.
+                Never output raw tool calls such as <function=...>, JSON tool syntax, or XML-like tags.
+
+                - **Page/Mode Control:** If the user asks to switch screens, open a feature, or says a feature name, 
+                you MUST call the 'set_frontend_mode' tool first:
+                    - "object detection", "detect objects", "camera mode", "what do you see": mode "object_detection".
+                    - "chat", "chatbox", "ask question", "assistant": mode "chat".
+                    - "read files", "file reader", "summarize file", "read my pdf": mode "files".
 
                 - **File Tool:** If the user asks to read, summarize, or get info from a pdf file 
                 (e.g., "summarize my report", "read the first PDF"), 
@@ -71,6 +77,40 @@ class Assistant(Agent):
         self.context_pairs = new_pairs
 
     
+    @function_tool
+    async def set_frontend_mode(
+        self,
+        ctx: RunContext,
+        mode: Literal["object_detection", "chat", "files"],
+    ) -> str:
+        """
+        Sends a command to the user's frontend to switch between focused pages.
+        Use this when the user asks for object detection, chat/chatbox, or read files.
+        """
+        logger.info(f"Sending 'set_frontend_mode' command: {mode}")
+
+        try:
+            room = get_job_context().room
+            participant = next(iter(room.remote_participants.values()), None)
+            if not participant:
+                logger.warning("No remote participants found to send frontend mode.")
+                return "Error: I can't find you in the room to switch screens."
+
+            payload = {
+                "type": "set_ui_mode",
+                "mode": mode,
+            }
+
+            await room.local_participant.publish_data(
+                json.dumps(payload),
+                destination_identities=[participant.identity],
+            )
+
+            return f"Switched to {mode.replace('_', ' ')} mode."
+        except Exception as e:
+            logger.error(f"Error sending frontend mode command: {e}")
+            return "An error occurred while trying to switch screens."
+
     @function_tool
     async def get_current_date_and_time(self, ctx: RunContext) -> str:
         """Get the current date and time."""
