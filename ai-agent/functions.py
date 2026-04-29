@@ -179,17 +179,27 @@ def handle_normal_chat(user_input: str, context: List[Dict]) -> str:
 
 def handle_image_description(user_input: str, base64_image: str) -> str:
     """Describe an image using Gemini."""
-    logger.info("Handling image description via Gemini...")
+    logger.info("Handling image description via Gemini.")
 
-    image_bytes = base64.b64decode(base64_image)
-    response = client.models.generate_content(
-        model=model,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-            user_input,
-        ],
-    )
-    return (response.text or "").strip()
+    try:
+        image_bytes = base64.b64decode(base64_image)
+        response = client.models.generate_content(
+            model=model,
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                user_input,
+            ],
+        )
+        return (response.text or "").strip()
+
+    except Exception as e:
+        msg = str(e)
+        logger.error(f"Gemini vision failed: {msg}")
+
+        if "503" in msg or "UNAVAILABLE" in msg or "high demand" in msg:
+            return "VISION_TEMPORARILY_UNAVAILABLE: The camera frame was received, but the vision model is temporarily overloaded."
+
+        return "VISION_ERROR: The camera frame was received, but I could not analyze it due to a temporary vision error."
 
 
 def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:

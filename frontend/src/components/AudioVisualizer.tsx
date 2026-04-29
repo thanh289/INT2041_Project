@@ -13,10 +13,10 @@ export default function AudioVisualizer() {
   const agentTrackRef = useMemo(() => {
     return agentParticipant && agentMicPublication
       ? {
-          participant: agentParticipant,
-          publication: agentMicPublication,
-          source: Track.Source.Microphone,
-        }
+        participant: agentParticipant,
+        publication: agentMicPublication,
+        source: Track.Source.Microphone,
+      }
       : undefined;
   }, [agentParticipant, agentMicPublication]);
 
@@ -24,15 +24,15 @@ export default function AudioVisualizer() {
     <div className="w-full h-full flex items-center justify-center bg-transparent">
       {/* Khung chứa sóng âm được thiết kế tối giản, hiện đại */}
       <div className="w-full h-full relative flex flex-col items-center justify-center p-8">
-        
+
         {/* Chỉ hiện sóng âm khi Agent thực sự tồn tại */}
         {agentTrackRef ? (
           <div className="w-full h-64 flex flex-col items-center justify-center">
-             {/* Hiệu ứng text chạy nhẹ nhàng dưới sóng âm */}
+            {/* Hiệu ứng text chạy nhẹ nhàng dưới sóng âm */}
             <span className="text-cyan-400/60 text-xs font-bold tracking-[0.5em] mb-8 animate-pulse uppercase">
               Signal Processing
             </span>
-            
+
             <div className="w-full max-w-4xl h-40 text-cyan-400 filter drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]">
               <BarVisualizer
                 state="listening"

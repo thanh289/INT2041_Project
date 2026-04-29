@@ -7,7 +7,6 @@ from docx import Document
 from datetime import datetime, timedelta
 
 BACKEND_BASE = os.getenv("BACKEND_BASE_URL")
-ENABLE_BACKEND = os.getenv("ENABLE_BACKEND", "true").lower() == "true"
 
 def get_next_filename(output_dir: str) -> str:
     """
@@ -160,9 +159,6 @@ def ensure_user_exists(username: str):
     Ensure the user exists in backend.
     If not, auto-register the user.
     """
-    if not ENABLE_BACKEND or not BACKEND_BASE:
-        print("[INFO] Backend disabled. Skip user existence check.")
-        return True
     
     # Try login first
     try:

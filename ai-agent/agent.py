@@ -37,6 +37,8 @@ class Assistant(Agent):
             instructions="""
                 You are a helpful voice AI assistant with special tools.
                 You MUST prioritize using a tool over answering directly if a tool is relevant.
+                When a tool returns a camera result, answer directly using that result.
+                ever output raw tool calls such as <function=...>, JSON tool syntax, or XML-like tags.
 
                 - **File Tool:** If the user asks to read, summarize, or get info from a pdf file 
                 (e.g., "summarize my report", "read the first PDF"), 
@@ -169,11 +171,30 @@ class Assistant(Agent):
             base64_image = base64.b64encode(img_bytes).decode("utf-8")
 
             # Calling OpenAI Vision
-            logger.info("Calling OpenAI Vision API...")
-            return handle_image_description(user_input, base64_image)
+            logger.info("Calling Gemini Vision API...")
+
+            vision_prompt = f"""
+            You are analyzing a real camera frame from the user's live video feed.
+            Answer the user's question using only the image.
+            If the image is unclear, say it is unclear.
+            Do not mention tools, APIs, functions, XML, or JSON.
+
+            User question: {user_input}
+            """.strip()
+
+            vision_result = handle_image_description(vision_prompt, base64_image)
+            logger.info(f"[VISION RESULT] {vision_result}")
+
+            if vision_result.startswith("VISION_TEMPORARILY_UNAVAILABLE"):
+                return "I received the camera image, but the vision model is temporarily overloaded. Please try again in a moment."
+
+            if vision_result.startswith("VISION_ERROR"):
+                return "I received the camera image, but I could not analyze it right now."
+
+            return f"Based on the camera image: {vision_result}"
         except Exception as e:
             logger.error(f"Error in describe_camera_view: {e}")
-            return f"Sorry, an error occurred while analyzing the image: {e}"
+            return f"Sorry, an error occurred while analyzing the image"
     
     @function_tool
     async def control_ui_device(
@@ -280,16 +301,6 @@ async def entrypoint(ctx: agents.JobContext):
 
     ctx.add_participant_entrypoint(entrypoint_fnc=on_participant_connected)
     ctx.room.on("participant_disconnected", on_participant_disconnected)
-
-    if (username is None) or (username.strip() == ""):
-        logger.error("AGENT_LOGIN_USERNAME is not set in environment variables.")
-        return
-    
-
-    if not ensure_user_exists(username):
-        logger.error(
-            "Cannot initialize assistant because user registration/login failed."
-        )
     
     assistant = Assistant()
 
@@ -335,11 +346,11 @@ async def entrypoint(ctx: agents.JobContext):
                     if role == "user":
                         # USER input text
                         logger.info(f"[USER] {content}")
-                        assistant.cache.add_user_message(content)
+                        assistant.cache.add_user_message(content[:800])
                     elif role == "assistant":
                         # AGENT response text
                         logger.info(f"[AGENT] {content}")
-                        assistant.cache.add_agent_message(content)
+                        assistant.cache.add_agent_message(content[:800])
                     new_ctx.add_message(role=role, content=content)
                 elif isinstance(content, ImageContent):
                     # image is either a rtc.VideoFrame or URL to the image
