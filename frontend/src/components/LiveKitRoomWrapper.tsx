@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { LiveKitRoom, RoomAudioRenderer, useRemoteParticipants } from "@livekit/components-react";
 import "@livekit/components-styles";
-import AccessibleControls from "./AccessibleControls";
-import AudioVisualizer from "./AudioVisualizer";
+import AgentWorkspace from "./AgentWorkspace";
 
 function RoomHeader() {
   const remoteParticipants = useRemoteParticipants();
@@ -71,7 +70,7 @@ export default function LiveKitRoomWrapper({
       token={token}
       serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
       data-lk-theme="default"
-      className="h-screen w-full font-sans flex flex-col bg-[#050505] text-white relative"
+      className="h-screen w-full font-sans flex flex-col bg-black text-white relative"
       onConnected={() => {
         console.log("Đã kết nối vào phòng!");
         const beep = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...");
@@ -80,26 +79,9 @@ export default function LiveKitRoomWrapper({
     >
       <RoomAudioRenderer />
       
-      {/* Universal Fixed Header */}
       <RoomHeader />
 
-      {/* Background Ambience */}
-      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-cyan-900/10 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-green-900/10 blur-[100px] rounded-full" />
-      </div>
-
-      <div className="flex-1 flex flex-col w-full h-full max-w-6xl mx-auto overflow-hidden z-10 p-2 md:p-6 gap-4">
-        {/* Top: Visualizer Area */}
-        <div className="h-[25vh] min-h-[150px] w-full relative overflow-hidden rounded-3xl p-6 shadow-[0_0_40px_rgba(34,211,238,0.05)] border border-white/10 bg-white/[0.02] backdrop-blur-xl focus-within:ring-4 focus-within:ring-yellow-400">
-          <AudioVisualizer />
-        </div>
-
-        {/* Middle/Bottom: Controls */}
-        <div className="flex-1 overflow-hidden">
-          <AccessibleControls />
-        </div>
-      </div>
+      <AgentWorkspace />
     </LiveKitRoom>
   );
 }

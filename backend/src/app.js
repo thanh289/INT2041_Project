@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 
 import { accountRouter } from "./routes/account.js";
+import { capabilitiesRouter } from "./routes/capabilities.js";
 import { messagesRouter } from "./routes/messages.js";
 import { conversationHistoryRouter } from "./routes/conversationHistory.js";
 
@@ -16,6 +17,7 @@ export function createApp(config) {
   });
 
   app.use("/api/account", accountRouter(config));
+  app.use("/api/capabilities", capabilitiesRouter(config));
   app.use("/api/messages", messagesRouter(config));
   app.use("/api/conversation-history", conversationHistoryRouter(config));
 
