@@ -11,7 +11,7 @@ from const import PAIRS_TO_FLUSH, LAST_N_PAIRS
 from utils import ensure_user_exists
 from PIL import Image
 from typing import Optional, Literal
-from functions import process_user_input, handle_image_description, get_weather_info, identify_currency_global, send_emergency_sos
+from functions import process_user_input, handle_image_description, get_weather_info, identify_currency_global
 
 from livekit import agents
 from livekit import rtc
@@ -65,8 +65,6 @@ class Assistant(Agent):
 
                 - **Currency Tool:** If the user asks to identify money or a bill, call 'identify_currency'
                 
-                - **SOS Tool**: If the user is in danger or needs immediate help, call 'trigger_emergency_sos'.
-
                 **CRITICAL RULE:** Do NOT ask the user to "upload a file." 
                 The 'process_file_request' tool handles file access. 
                 For all other general chat, respond normally.
@@ -75,7 +73,6 @@ class Assistant(Agent):
         )
         self.context_pairs = []
         self.cache = None
-        self.latest_coords = None
 
     def update_context(self, username: str):
         if not self.cache: # just initialize once
@@ -304,7 +301,7 @@ class Assistant(Agent):
     @function_tool
     async def identify_currency(self, ctx: RunContext) -> str:
         """
-        Identify the value of the currency note currently shown to the camera.
+        Identify the value of the Vietnamese currency note currently shown to the camera.
         Use this when the user asks 'how much is this?', 'what is this bill?', or 'identify this money'.
         """
         logger.info("Tool 'identify_currency' called.")
@@ -330,17 +327,6 @@ class Assistant(Agent):
             return identify_currency_global(base64_image)
         finally:
             await video_stream.aclose()
-
-    @function_tool
-    async def trigger_emergency_sos(self, ctx: RunContext) -> str:
-        """
-        Activates emergency mode and sends the user's location to their family via email.
-        Use this tool when the user says "Help me", "SOS", "I need help", or "Emergency".
-        """
-        logger.info("Emergency Tool activated via voice.")
-        return send_emergency_sos(precise_coords=self.latest_coords)
-    
-
 # Phase 1 — Startup (runs once when the agent process boots)
     # entrypoint() is called by LiveKit. It registers the user with the backend, creates an empty Assistant object, 
     # and starts the AgentSession wiring together Groq, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
@@ -394,16 +380,6 @@ async def entrypoint(ctx: agents.JobContext):
         # Nạp vào agent
         await assistant.update_chat_ctx(initial_ctx)
         assistant.update_context(assistant.cache.username)
-
-        @ctx.room.on("data_received")
-        def on_data_received(data: rtc.DataPacket):
-            try:
-                payload = json.loads(data.data)
-                if payload.get("type") == "location_update":
-                    assistant.latest_coords = payload.get("data")
-                    logger.info(f"✅ Received GPS coordinates: {assistant.latest_coords}")
-            except Exception as e:
-                logger.error(f"Error parsing frontend data: {e}")
 
     def on_participant_disconnected(participant: rtc.RemoteParticipant):
         logger.info(f"Participant disconnected: {participant.identity}")
