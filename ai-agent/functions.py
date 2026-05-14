@@ -2,6 +2,8 @@ import base64
 import os
 from typing import List, Dict, Type, TypeVar
 
+import requests
+
 from pydantic import BaseModel
 from google.genai import types
 from groq import Groq
@@ -281,3 +283,40 @@ def handle_tts(text: str, voice: str = "en-US-AriaNeural", output_dir: str = OUT
         logger.error(f"TTS synthesis failed: {e}")
 
     return TTS(raw_text=clean_text, audio_direction=None)
+
+
+def get_weather_info(location: str) -> str:
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key:
+        return "Weather API key is not configured."
+    
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={location}&appid={api_key}&units=metric&lang=en"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        if data.get("cod") != 200:
+            return f"I couldn't find the weather for {location}. Please check the city name."
+        
+        temp = data["main"]["temp"]
+        desc = data["weather"][0]["description"]
+        return f"The current weather in {location} is {desc} with a temperature of {temp} degrees Celsius."
+    except Exception as e:
+        return f"Error fetching weather: {e}"
+    
+def identify_currency_global(base64_image: str) -> str:
+    prompt = """
+    Analyze the image to identify the currency and its denomination.
+    1. Identify the currency (e.g., VND, USD, EUR, etc.) and its value.
+    2. The image might be mirrored (front camera), focus on color, patterns, and numbers.
+    3. Response format: 
+       - If identified: [Value] [Currency Name] (e.g., '100,000 VND' or '20 USD').
+       - If not sure: 'I can see a bill but I am not sure about its value'.
+       - If no money: 'No currency detected'.
+    Keep it extremely short for voice output.
+    """
+    try:
+        result = handle_image_description(prompt, base64_image)
+        return result
+    except Exception as e:
+        return f"Error identifying currency: {e}"

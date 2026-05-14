@@ -11,8 +11,7 @@ from const import PAIRS_TO_FLUSH, LAST_N_PAIRS
 from utils import ensure_user_exists
 from PIL import Image
 from typing import Optional, Literal
-from functions import process_user_input, handle_image_description
-
+from functions import process_user_input, handle_image_description, get_weather_info, identify_vietnamese_currency
 
 from livekit import agents
 from livekit import rtc
@@ -61,6 +60,11 @@ class Assistant(Agent):
                     - "mute/unmute" or "turn on/off microphone": call 'control_ui_device' (target: "microphone", status: "on"/"off").
                     - "open/close chat" or "show/hide chat": call 'control_ui_device' (target: "chat", status: "on"/"off").
 
+                - **Weather Tool:** If the user asks about the weather or temperature (e.g., "what is the weather in Hanoi?", "how's the weather?"), 
+                you MUST call the 'get_weather' tool.
+
+                - **Currency Tool:** If the user asks to identify money or a bill, call 'identify_currency'
+                
                 **CRITICAL RULE:** Do NOT ask the user to "upload a file." 
                 The 'process_file_request' tool handles file access. 
                 For all other general chat, respond normally.
@@ -279,7 +283,50 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"Error sending RPC 'control_ui_device': {e}")
             return "An error occurred while trying to send the command."
+        
+    @function_tool
+    async def get_weather(self, ctx: RunContext, location: str) -> str:
+        """
+        Get the current weather for a specific city.
+        Use this when the user asks about weather, temperature, or climate in a location.
+        """
+        logger.info(f"Tool 'get_weather' called for: {location}")
+        try:
+            result = get_weather_info(location)
+            return result
+        except Exception as e:
+            logger.error(f"Error in get_weather tool: {e}")
+            return f"I'm sorry, I couldn't fetch the weather for {location} right now."
 
+    @function_tool
+    async def identify_currency(self, ctx: RunContext) -> str:
+        """
+        Identify the value of the Vietnamese currency note currently shown to the camera.
+        Use this when the user asks 'how much is this?', 'what is this bill?', or 'identify this money'.
+        """
+        logger.info("Tool 'identify_currency' called.")
+        
+        room = get_job_context().room
+        participant = next(iter(room.remote_participants.values()), None)
+        if not participant: return "I can't see you."
+
+        video_track_pub = next((pub for pub in participant.track_publications.values()
+                               if pub.track and pub.track.kind == rtc.TrackKind.KIND_VIDEO), None)
+        if not video_track_pub: return "Please turn on your camera."
+
+        video_stream = rtc.VideoStream(video_track_pub.track)
+        try:
+            event = await asyncio.wait_for(anext(video_stream), timeout=2.0)
+            rgb_frame = event.frame.convert(rtc.VideoBufferType.RGB24)
+            img = Image.frombytes("RGB", (rgb_frame.width, rgb_frame.height), rgb_frame.data)
+            
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            base64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+            return identify_currency_global(base64_image)
+        finally:
+            await video_stream.aclose()
 # Phase 1 — Startup (runs once when the agent process boots)
     # entrypoint() is called by LiveKit. It registers the user with the backend, creates an empty Assistant object, 
     # and starts the AgentSession wiring together Groq, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
