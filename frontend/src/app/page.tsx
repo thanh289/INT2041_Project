@@ -17,10 +17,42 @@ export default function Home() {
     setUsername(storedUser);
   }, []);
 
+  // Hàm xử lý khi người dùng nhấn nút Bắt đầu
+  const handleStartConnection = () => {
+    // Kích hoạt yêu cầu quyền truy cập vị trí ngay khi click
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp
+          };
+          // Lưu vào localStorage để các component con hoặc Agent có thể truy cập
+          localStorage.setItem("user_coords", JSON.stringify(coords));
+          console.log("📍 Đã xác định vị trí chính xác:", coords);
+        },
+        (error) => {
+          console.warn("⚠️ Không thể lấy vị trí chính xác:", error.message);
+          // Vẫn cho phép tiếp tục, Backend sẽ dùng fallback IP nếu cần
+        },
+        { 
+          enableHighAccuracy: true, // Ép dùng GPS/WiFi để có độ chính xác cao nhất
+          timeout: 20000,            // Tăng lên 20 giây
+          maximumAge: 60000          // Cho phép dùng dữ liệu cũ trong vòng 1 phút
+        }
+      );
+    }
+
+    // Chuyển trạng thái để render LiveKitRoomWrapper (kích hoạt quyền Cam/Mic)
+    setConnect(true);
+  };
+
   if (!username) return null;
 
-    return (
-      <main className="relative flex min-h-screen flex-col items-center justify-center p-8 bg-[#050505] text-white overflow-hidden selection:bg-yellow-400 selection:text-black">
+  return (
+    <main className="relative flex min-h-screen flex-col items-center justify-center p-8 bg-[#050505] text-white overflow-hidden selection:bg-yellow-400 selection:text-black">
       {/* Background Elements */}
       <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0vw,transparent_50vw)]" />
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-900/20 blur-[120px] rounded-full pointer-events-none" />
@@ -38,8 +70,8 @@ export default function Home() {
 
           <div className="flex-1 flex flex-col items-center justify-center w-full my-auto">
             <button
-              onClick={() => setConnect(true)}
-              aria-label="Nhấn hai lần vào đây để kết nối với Trợ lý và bắt đầu sử dụng"
+              onClick={handleStartConnection}
+              aria-label="Nhấn hai lần vào đây để cấp quyền truy cập vị trí và kết nối với Trợ lý"
               className="group relative flex items-center justify-center w-[300px] h-[300px] md:w-[400px] md:h-[400px] rounded-full bg-black/40 backdrop-blur-xl border border-white/10 shadow-[0_0_50px_rgba(250,204,21,0.3)] hover:shadow-[0_0_80px_rgba(250,204,21,0.5)] transition-all duration-500 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-8 focus-visible:ring-yellow-400"
             >
               {/* Outer pulsing ring */}

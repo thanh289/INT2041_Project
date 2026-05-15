@@ -2,6 +2,11 @@ import base64
 import os
 from typing import List, Dict, Type, TypeVar
 
+import geocoder
+import smtplib
+from email.mime.text import MIMEText
+from dotenv import load_dotenv
+
 import requests
 
 from pydantic import BaseModel
@@ -32,6 +37,7 @@ T = TypeVar("T", bound=BaseModel)
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
+load_dotenv()
 
 def _groq_generate(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
     """Call Groq and return plain text. Set json_mode=True for structured JSON output."""
@@ -320,3 +326,63 @@ def identify_currency_global(base64_image: str) -> str:
         return result
     except Exception as e:
         return f"Error identifying currency: {e}"
+    
+def send_emergency_sos(precise_coords=None):
+    """
+    Gửi email cứu hộ khẩn cấp kèm theo vị trí của người dùng.
+    Ưu tiên sử dụng tọa độ chính xác từ Frontend gửi qua LiveKit Data Channel.
+    """
+    try:
+        # 1. Lấy thông tin cấu hình từ file .env
+        sender_email = os.getenv("EMAIL_SENDER")
+        receiver_email = os.getenv("EMAIL_RECEIVER")
+        app_password = os.getenv("EMAIL_APP_PASSWORD")
+        
+        # 2. Xác định tọa độ và nguồn dữ liệu
+        if precise_coords and 'lat' in precise_coords and 'lng' in precise_coords:
+            # Sử dụng tọa độ GPS/WiFi chính xác từ trình duyệt
+            lat = precise_coords['lat']
+            lng = precise_coords['lng']
+            address = "Vị trí chính xác từ thiết bị người dùng"
+            source_msg = "Dữ liệu được xác định qua GPS/WiFi (Độ chính xác cao)."
+        else:
+            # Fallback: Lấy vị trí qua IP nếu không có tọa độ từ Frontend
+            import geocoder
+            g = geocoder.ip('me')
+            lat_lng = g.latlng if g.latlng else [21.0285, 105.8542] # Mặc định Hà Nội
+            lat, lng = lat_lng[0], lat_lng[1]
+            address = g.address if g.address else "Địa chỉ ước tính qua mạng IP"
+            source_msg = "Dữ liệu ước tính qua địa chỉ IP mạng (Độ chính xác tương đối)."
+
+        google_maps_link = f"https://www.google.com/maps?q={lat},{lng}"
+
+        # 3. Tạo nội dung Email với đầy đủ thông tin
+        subject = "[SOS] YÊU CẦU HỖ TRỢ KHẨN CẤP"
+        body = f"""
+        CẢNH BÁO: Người dùng đang gặp sự cố và yêu cầu trợ giúp khẩn cấp!
+        
+        Thông tin vị trí:
+        - Nguồn dữ liệu: {source_msg}
+        - Địa chỉ ước tính: {address}
+        - Tọa độ: {lat}, {lng}
+        - Xem trực tiếp trên Google Maps: {google_maps_link}
+        
+        Đây là tin nhắn tự động từ hệ thống Trợ lý Khiếm thị SightTech.
+        """
+        
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+
+        # 4. Kết nối server Gmail và gửi mail
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, app_password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+        
+        logger.info(f"✅ Emergency SOS email sent successfully to {receiver_email} using {source_msg}")
+        return f"I have sent an SOS alert with your precise location to your emergency contact."
+
+    except Exception as e:
+        logger.error(f"❌ Error in send_emergency_sos: {e}")
+        return "I tried to send an SOS alert but encountered a technical error with the mail server."
