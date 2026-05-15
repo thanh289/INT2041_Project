@@ -476,7 +476,10 @@ async def entrypoint(ctx: agents.JobContext):
             print(f"Conversation item added from {role}: {text_contents}. \
                   interrupted: {event.item.interrupted}")
 
-            new_ctx = assistant.chat_ctx.copy()
+            # NOTE: Do NOT manually update chat_ctx here.
+            # LiveKit's AgentSession already manages chat_ctx internally.
+            # Doing so causes every message to be appended twice, producing duplicated responses.
+            # This handler is only for persistence (cache + backend).
 
             # to iterate over all types of content:
             for content in event.item.content:
@@ -489,16 +492,12 @@ async def entrypoint(ctx: agents.JobContext):
                         # AGENT response text
                         logger.info(f"[AGENT] {content}")
                         assistant.cache.add_agent_message(content[:800])
-                    new_ctx.add_message(role=role, content=content)
                 elif isinstance(content, ImageContent):
-                    # image is either a rtc.VideoFrame or URL to the image
                     print(f" - image: {content.image}")
                 elif isinstance(content, AudioContent):
-                    # frame is a list[rtc.AudioFrame]
                     print(
                         f" - audio: {content.frame}, transcript: {content.transcript}"
                     )
-            await assistant.update_chat_ctx(new_ctx)
             assistant.update_context(assistant.cache.username)
             print("Updated context pairs:", assistant.context_pairs)
 
