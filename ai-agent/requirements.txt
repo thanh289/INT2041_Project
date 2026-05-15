@@ -14,3 +14,5 @@ livekit-plugins-silero
 livekit-plugins-noise-cancellation~=0.2
 livekit-plugins-google
 livekit-plugins-groq
+livekit-plugins-openai
+geocoder
