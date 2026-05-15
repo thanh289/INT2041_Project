@@ -11,7 +11,7 @@ import requests
 
 from pydantic import BaseModel
 from google.genai import types
-from groq import Groq
+from openai import OpenAI
 import azure.cognitiveservices.speech as speechsdk
 
 from class_using import RequestType, Summarize, TTS, AgentResponse, FileContent
@@ -26,23 +26,40 @@ from utils import (
     get_next_filename,
 )
 
+load_dotenv()
+
 model = MODEL
 T = TypeVar("T", bound=BaseModel)
 
 # ---------------------------------------------------------------------------
-# Groq client — handles ALL text tasks (routing + summarization)
+# DeepSeek client — handles ALL text tasks (routing + summarization)
 # Gemini is reserved for image description only (multimodal).
 # ---------------------------------------------------------------------------
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-GROQ_MODEL = "llama-3.3-70b-versatile"
+deepseek_client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com",
+)
 
-load_dotenv()
 
-def _groq_generate(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
-    """Call Groq and return plain text. Set json_mode=True for structured JSON output."""
+def _resolve_text_model() -> str:
+    raw_model = os.getenv("DEEPSEEK_TEXT_MODEL") or os.getenv("DEEPSEEK_MODEL") or "deepseek-chat"
+    lowered = raw_model.lower()
+    if "reasoner" in lowered or lowered.startswith("deepseek-v4"):
+        logger.warning(
+            f"Model '{raw_model}' can trigger thinking-mode incompatibilities; switching text model to 'deepseek-chat'."
+        )
+        return "deepseek-chat"
+    return raw_model
+
+
+DEEPSEEK_MODEL = _resolve_text_model()
+
+
+def _deepseek_generate(system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
+    """Call DeepSeek and return plain text. Set json_mode=True for structured JSON output."""
     kwargs = {
-        "model": GROQ_MODEL,
+        "model": DEEPSEEK_MODEL,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -52,7 +69,7 @@ def _groq_generate(system_prompt: str, user_prompt: str, json_mode: bool = False
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
 
-    response = groq_client.chat.completions.create(**kwargs)
+    response = deepseek_client.chat.completions.create(**kwargs)
     return (response.choices[0].message.content or "").strip()
 
 
@@ -61,8 +78,8 @@ def _groq_generate(system_prompt: str, user_prompt: str, json_mode: bool = False
 # ---------------------------------------------------------------------------
 
 def route_request(user_input: str, context: List[Dict]) -> RequestType:
-    """Classify the user request using Groq."""
-    logger.info("Routing request via Groq...")
+    """Classify the user request using DeepSeek."""
+    logger.info("Routing request via DeepSeek...")
 
     context_block = ""
     if context:
@@ -87,7 +104,7 @@ def route_request(user_input: str, context: List[Dict]) -> RequestType:
         {"request_type": "...", "confidence_score": 0.95, "description": "...", "file_name": null, "nth_file": null}
         """.strip()
 
-    raw = _groq_generate(
+    raw = _deepseek_generate(
         system_prompt=system_prompt,
         user_prompt=f"Conversation history:\n{context_block}\nClassify this request: {user_input}",
         json_mode=True,
@@ -96,7 +113,7 @@ def route_request(user_input: str, context: List[Dict]) -> RequestType:
     try:
         return RequestType.model_validate_json(raw)
     except Exception as e:
-        logger.error(f"Groq routing parse error: {e}. Raw: {raw}")
+        logger.error(f"DeepSeek routing parse error: {e}. Raw: {raw}")
         return RequestType(
             request_type="unsupported",
             confidence_score=0.0,
@@ -107,10 +124,10 @@ def route_request(user_input: str, context: List[Dict]) -> RequestType:
 
 
 def handle_summarization(text: str, max_words: int = 50) -> Summarize:
-    """Summarize text using Groq."""
-    logger.info("Handling summarization via Groq...")
+    """Summarize text using DeepSeek."""
+    logger.info("Handling summarization via DeepSeek...")
 
-    summary_text = _groq_generate(
+    summary_text = _deepseek_generate(
         system_prompt="You are a helpful assistant that summarizes text concisely. Return only the summary, nothing else.",
         user_prompt=f"Summarize the following text in about {max_words} words:\n\n{text}",
     )
@@ -171,16 +188,16 @@ def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, 
 
 
 def handle_normal_chat(user_input: str, context: List[Dict]) -> str:
-    """General chat via Groq."""
-    logger.info("Handling normal chat via Groq...")
+    """General chat via DeepSeek."""
+    logger.info("Handling normal chat via DeepSeek...")
 
     context_block = ""
     if context:
         for pair in context:
             context_block += f"User: {pair.get('user', '')}\nAssistant: {pair.get('bot', '')}\n"
 
-    return _groq_generate(
-        system_prompt="You are a helpful and friendly assistant.",
+    return _deepseek_generate(
+        system_prompt="You are a helpful and friendly assistant. Respond in plain text only, with no Markdown formatting characters (no **, *, _, #, or backticks).",
         user_prompt=f"Conversation history:\n{context_block}\nRespond to: {user_input}",
     )
 
@@ -329,45 +346,45 @@ def identify_currency_global(base64_image: str) -> str:
     
 def send_emergency_sos(precise_coords=None):
     """
-    Gửi email cứu hộ khẩn cấp kèm theo vị trí của người dùng.
-    Ưu tiên sử dụng tọa độ chính xác từ Frontend gửi qua LiveKit Data Channel.
+    Send an emergency alert email with the user's location.
+    Prefer precise coordinates received from Frontend via LiveKit Data Channel.
     """
     try:
-        # 1. Lấy thông tin cấu hình từ file .env
+        # 1. Load configuration from .env
         sender_email = os.getenv("EMAIL_SENDER")
         receiver_email = os.getenv("EMAIL_RECEIVER")
         app_password = os.getenv("EMAIL_APP_PASSWORD")
         
-        # 2. Xác định tọa độ và nguồn dữ liệu
+        # 2. Determine coordinates and data source
         if precise_coords and 'lat' in precise_coords and 'lng' in precise_coords:
-            # Sử dụng tọa độ GPS/WiFi chính xác từ trình duyệt
+            # Use precise GPS/WiFi coordinates from the browser
             lat = precise_coords['lat']
             lng = precise_coords['lng']
-            address = "Vị trí chính xác từ thiết bị người dùng"
-            source_msg = "Dữ liệu được xác định qua GPS/WiFi (Độ chính xác cao)."
+            address = "Precise location from user's device"
+            source_msg = "Data obtained via GPS/WiFi (high accuracy)."
         else:
-            # Fallback: Lấy vị trí qua IP nếu không có tọa độ từ Frontend
+            # Fallback: estimate location by IP if frontend coordinates are unavailable
             import geocoder
             g = geocoder.ip('me')
             lat_lng = g.latlng if g.latlng else [21.0285, 105.8542] # Mặc định Hà Nội
             lat, lng = lat_lng[0], lat_lng[1]
-            address = g.address if g.address else "Địa chỉ ước tính qua mạng IP"
-            source_msg = "Dữ liệu ước tính qua địa chỉ IP mạng (Độ chính xác tương đối)."
+            address = g.address if g.address else "Estimated address via network IP"
+            source_msg = "Data estimated via network IP address (approximate accuracy)."
 
         google_maps_link = f"https://www.google.com/maps?q={lat},{lng}"
 
-        # 3. Tạo nội dung Email với đầy đủ thông tin
-        subject = "[SOS] YÊU CẦU HỖ TRỢ KHẨN CẤP"
+        # 3. Build email content
+        subject = "[SOS] EMERGENCY ASSISTANCE REQUEST"
         body = f"""
-        CẢNH BÁO: Người dùng đang gặp sự cố và yêu cầu trợ giúp khẩn cấp!
+        ALERT: The user is in distress and requests immediate assistance.
         
-        Thông tin vị trí:
-        - Nguồn dữ liệu: {source_msg}
-        - Địa chỉ ước tính: {address}
-        - Tọa độ: {lat}, {lng}
-        - Xem trực tiếp trên Google Maps: {google_maps_link}
+        Location details:
+        - Data source: {source_msg}
+        - Estimated address: {address}
+        - Coordinates: {lat}, {lng}
+        - View on Google Maps: {google_maps_link}
         
-        Đây là tin nhắn tự động từ hệ thống Trợ lý Khiếm thị SightTech.
+        This is an automated message from the BlindChat accessibility assistant.
         """
         
         msg = MIMEText(body)
@@ -375,7 +392,7 @@ def send_emergency_sos(precise_coords=None):
         msg['From'] = sender_email
         msg['To'] = receiver_email
 
-        # 4. Kết nối server Gmail và gửi mail
+        # 4. Connect to Gmail SMTP and send email
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender_email, app_password)
             server.sendmail(sender_email, receiver_email, msg.as_string())

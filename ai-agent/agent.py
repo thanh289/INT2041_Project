@@ -15,14 +15,13 @@ from functions import process_user_input, handle_image_description, get_weather_
 
 from livekit import agents
 from livekit import rtc
-from livekit.agents import AgentSession, Agent, RoomInputOptions, RunContext, get_job_context
-from livekit.plugins import noise_cancellation, silero, azure, groq
+from livekit.agents import AgentSession, Agent, RunContext, get_job_context
+from livekit.agents.voice.room_io.types import RoomOptions, AudioInputOptions
+from livekit.plugins import noise_cancellation, silero, azure, openai
 from livekit.agents.llm import function_tool
 from livekit.agents import ConversationItemAddedEvent
 from livekit.agents.llm import ImageContent, AudioContent
 from livekit.agents.llm import ChatContext
-
-from functions import process_user_input
 
 load_dotenv(".env")
 
@@ -38,6 +37,7 @@ class Assistant(Agent):
                 You MUST prioritize using a tool over answering directly if a tool is relevant.
                 When a tool returns a camera result, answer directly using that result.
                 Never output raw tool calls such as <function=...>, JSON tool syntax, or XML-like tags.
+                Always respond in plain text only. Do not use Markdown formatting such as **bold**, *italic*, backticks, headings, or bullet markers.
 
                 - **Page/Mode Control:** If the user asks to switch screens, open a feature, or says a feature name, 
                 you MUST call the 'set_frontend_mode' tool first:
@@ -343,17 +343,17 @@ class Assistant(Agent):
 
 # Phase 1 — Startup (runs once when the agent process boots)
     # entrypoint() is called by LiveKit. It registers the user with the backend, creates an empty Assistant object, 
-    # and starts the AgentSession wiring together Groq, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
+    # and starts the AgentSession wiring together DeepSeek, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
 
 # Phase 2 — Participant joins (runs once per user connection)
     # When a user connects to the LiveKit room, on_participant_connected fires. 
     # It creates a ConversationCache for that user, fetches their past conversation history from the backend, 
-    # and injects it into a ChatContext so Groq starts the conversation already knowing what was said before.
+    # and injects it into a ChatContext so DeepSeek starts the conversation already knowing what was said before.
 
 # Phase 3 — Conversation loop (runs every time the user speaks)
-    # Azure STT transcribes the user's voice. Groq reads the transcript and decides: 
+    # Azure STT transcribes the user's voice. DeepSeek reads the transcript and decides: 
     # does this need a tool, or can I answer directly? If a tool is needed (file, camera, time, UI control),
-    # it calls it and feeds the result back to itself. Either way, Groq produces a text response which Azure TTS speaks back to the user.
+    # it calls it and feeds the result back to itself. Either way, DeepSeek produces a text response which Azure TTS speaks back to the user.
 # Phase 4 — Persistence (after every response)
     # on_conversation_item_added saves both the user message and agent reply to ConversationCache. 
     # Once 5 pairs accumulate, it flushes them to the backend — then the loop waits for the next thing the user says.
@@ -415,25 +415,38 @@ async def entrypoint(ctx: agents.JobContext):
     
     assistant = Assistant()
     
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    if not groq_api_key:
-        logger.error("GROQ_API_KEY is not set in environment variables.")
+    deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not deepseek_api_key:
+        logger.error("DEEPSEEK_API_KEY is not set in environment variables.")
         return
+
+    voice_model = (
+        os.environ.get("DEEPSEEK_VOICE_MODEL")
+        or os.environ.get("DEEPSEEK_MODEL")
+        or "deepseek-chat"
+    )
+    lowered_voice_model = voice_model.lower()
+    if "reasoner" in lowered_voice_model or lowered_voice_model.startswith("deepseek-v4"):
+        logger.warning(
+            f"Model '{voice_model}' can trigger thinking-mode incompatibilities; switching voice model to 'deepseek-chat'."
+        )
+        voice_model = "deepseek-chat"
 
     session = AgentSession(
         stt=azure.STT(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        llm=groq.LLM(
-            api_key=groq_api_key,
-            model=os.environ.get("GROQ_AGENT_MODEL", "llama-3.3-70b-versatile"),
+        llm=openai.LLM(
+            base_url="https://api.deepseek.com",
+            api_key=deepseek_api_key,
+            model=voice_model,
         ),
         tts=azure.TTS(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        vad=silero.VAD.load(min_silence_duration=2.0),
+        vad=silero.VAD.load(min_silence_duration=0.8),
     )
 
     @session.on("conversation_item_added")
@@ -441,8 +454,22 @@ async def entrypoint(ctx: agents.JobContext):
         # async without blocking main thread
         async def async_handler():
             if assistant.cache is None:
-                logger.warning("Conversation cache is not initialized yet; skipping persistence.")
-                return
+                room = get_job_context().room
+                participant = next(iter(room.remote_participants.values()), None)
+                if participant:
+                    assistant.cache = ConversationCache(
+                        username=participant.identity,
+                        pairs_to_flush=int(PAIRS_TO_FLUSH),
+                    )
+                    assistant.update_context(participant.identity)
+                    logger.info(
+                        f"Conversation cache initialized lazily for {participant.identity}."
+                    )
+                else:
+                    logger.debug(
+                        "Skipping persistence because no remote participant is connected yet."
+                    )
+                    return
             
             role = event.item.role
             text_contents = event.item.text_content
@@ -486,9 +513,11 @@ async def entrypoint(ctx: agents.JobContext):
     await session.start(
         room=ctx.room,
         agent=assistant,
-        room_input_options=RoomInputOptions(
-            video_enabled=True,
-            noise_cancellation=noise_cancellation.BVC(), 
+        room_options=RoomOptions(
+            video_input=True,
+            audio_input=AudioInputOptions(
+                noise_cancellation=noise_cancellation.BVC(),
+            ),
         ),
     )
 
