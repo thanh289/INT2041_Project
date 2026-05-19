@@ -11,19 +11,17 @@ from const import PAIRS_TO_FLUSH, LAST_N_PAIRS
 from utils import ensure_user_exists
 from PIL import Image
 from typing import Optional, Literal
-from functions import process_user_input, handle_image_description
-
+from functions import process_user_input, handle_image_description, get_weather_info, identify_currency_global, send_emergency_sos
 
 from livekit import agents
 from livekit import rtc
-from livekit.agents import AgentSession, Agent, RoomInputOptions, RunContext, get_job_context
-from livekit.plugins import noise_cancellation, silero, azure, groq
+from livekit.agents import AgentSession, Agent, RunContext, get_job_context
+from livekit.agents.voice.room_io.types import RoomOptions, AudioInputOptions
+from livekit.plugins import noise_cancellation, silero, azure, openai
 from livekit.agents.llm import function_tool
 from livekit.agents import ConversationItemAddedEvent
 from livekit.agents.llm import ImageContent, AudioContent
 from livekit.agents.llm import ChatContext
-
-from functions import process_user_input
 
 load_dotenv(".env")
 
@@ -37,6 +35,15 @@ class Assistant(Agent):
             instructions="""
                 You are a helpful voice AI assistant with special tools.
                 You MUST prioritize using a tool over answering directly if a tool is relevant.
+                When a tool returns a camera result, answer directly using that result.
+                Never output raw tool calls such as <function=...>, JSON tool syntax, or XML-like tags.
+                Always respond in plain text only. Do not use Markdown formatting such as **bold**, *italic*, backticks, headings, or bullet markers.
+
+                - **Page/Mode Control:** If the user asks to switch screens, open a feature, or says a feature name, 
+                you MUST call the 'set_frontend_mode' tool first:
+                    - "object detection", "detect objects", "camera mode", "what do you see": mode "object_detection".
+                    - "chat", "chatbox", "ask question", "assistant": mode "chat".
+                    - "read files", "file reader", "summarize file", "read my pdf": mode "files".
 
                 - **File Tool:** If the user asks to read, summarize, or get info from a pdf file 
                 (e.g., "summarize my report", "read the first PDF"), 
@@ -53,6 +60,13 @@ class Assistant(Agent):
                     - "mute/unmute" or "turn on/off microphone": call 'control_ui_device' (target: "microphone", status: "on"/"off").
                     - "open/close chat" or "show/hide chat": call 'control_ui_device' (target: "chat", status: "on"/"off").
 
+                - **Weather Tool:** If the user asks about the weather or temperature (e.g., "what is the weather in Hanoi?", "how's the weather?"), 
+                you MUST call the 'get_weather' tool.
+
+                - **Currency Tool:** If the user asks to identify money or a bill, call 'identify_currency'
+                
+                - **SOS Tool**: If the user is in danger or needs immediate help, call 'trigger_emergency_sos'.
+
                 **CRITICAL RULE:** Do NOT ask the user to "upload a file." 
                 The 'process_file_request' tool handles file access. 
                 For all other general chat, respond normally.
@@ -61,6 +75,7 @@ class Assistant(Agent):
         )
         self.context_pairs = []
         self.cache = None
+        self.latest_coords = None
 
     def update_context(self, username: str):
         if not self.cache: # just initialize once
@@ -69,6 +84,40 @@ class Assistant(Agent):
         self.context_pairs = new_pairs
 
     
+    @function_tool
+    async def set_frontend_mode(
+        self,
+        ctx: RunContext,
+        mode: Literal["object_detection", "chat", "files"],
+    ) -> str:
+        """
+        Sends a command to the user's frontend to switch between focused pages.
+        Use this when the user asks for object detection, chat/chatbox, or read files.
+        """
+        logger.info(f"Sending 'set_frontend_mode' command: {mode}")
+
+        try:
+            room = get_job_context().room
+            participant = next(iter(room.remote_participants.values()), None)
+            if not participant:
+                logger.warning("No remote participants found to send frontend mode.")
+                return "Error: I can't find you in the room to switch screens."
+
+            payload = {
+                "type": "set_ui_mode",
+                "mode": mode,
+            }
+
+            await room.local_participant.publish_data(
+                json.dumps(payload),
+                destination_identities=[participant.identity],
+            )
+
+            return f"Switched to {mode.replace('_', ' ')} mode."
+        except Exception as e:
+            logger.error(f"Error sending frontend mode command: {e}")
+            return "An error occurred while trying to switch screens."
+
     @function_tool
     async def get_current_date_and_time(self, ctx: RunContext) -> str:
         """Get the current date and time."""
@@ -169,11 +218,30 @@ class Assistant(Agent):
             base64_image = base64.b64encode(img_bytes).decode("utf-8")
 
             # Calling OpenAI Vision
-            logger.info("Calling OpenAI Vision API...")
-            return handle_image_description(user_input, base64_image)
+            logger.info("Calling Gemini Vision API...")
+
+            vision_prompt = f"""
+            You are analyzing a real camera frame from the user's live video feed.
+            Answer the user's question using only the image.
+            If the image is unclear, say it is unclear.
+            Do not mention tools, APIs, functions, XML, or JSON.
+
+            User question: {user_input}
+            """.strip()
+
+            vision_result = handle_image_description(vision_prompt, base64_image)
+            logger.info(f"[VISION RESULT] {vision_result}")
+
+            if vision_result.startswith("VISION_TEMPORARILY_UNAVAILABLE"):
+                return "I received the camera image, but the vision model is temporarily overloaded. Please try again in a moment."
+
+            if vision_result.startswith("VISION_ERROR"):
+                return "I received the camera image, but I could not analyze it right now."
+
+            return f"Based on the camera image: {vision_result}"
         except Exception as e:
             logger.error(f"Error in describe_camera_view: {e}")
-            return f"Sorry, an error occurred while analyzing the image: {e}"
+            return f"Sorry, an error occurred while analyzing the image"
     
     @function_tool
     async def control_ui_device(
@@ -218,20 +286,74 @@ class Assistant(Agent):
         except Exception as e:
             logger.error(f"Error sending RPC 'control_ui_device': {e}")
             return "An error occurred while trying to send the command."
+        
+    @function_tool
+    async def get_weather(self, ctx: RunContext, location: str) -> str:
+        """
+        Get the current weather for a specific city.
+        Use this when the user asks about weather, temperature, or climate in a location.
+        """
+        logger.info(f"Tool 'get_weather' called for: {location}")
+        try:
+            result = get_weather_info(location)
+            return result
+        except Exception as e:
+            logger.error(f"Error in get_weather tool: {e}")
+            return f"I'm sorry, I couldn't fetch the weather for {location} right now."
+
+    @function_tool
+    async def identify_currency(self, ctx: RunContext) -> str:
+        """
+        Identify the value of the currency note currently shown to the camera.
+        Use this when the user asks 'how much is this?', 'what is this bill?', or 'identify this money'.
+        """
+        logger.info("Tool 'identify_currency' called.")
+        
+        room = get_job_context().room
+        participant = next(iter(room.remote_participants.values()), None)
+        if not participant: return "I can't see you."
+
+        video_track_pub = next((pub for pub in participant.track_publications.values()
+                               if pub.track and pub.track.kind == rtc.TrackKind.KIND_VIDEO), None)
+        if not video_track_pub: return "Please turn on your camera."
+
+        video_stream = rtc.VideoStream(video_track_pub.track)
+        try:
+            event = await asyncio.wait_for(anext(video_stream), timeout=2.0)
+            rgb_frame = event.frame.convert(rtc.VideoBufferType.RGB24)
+            img = Image.frombytes("RGB", (rgb_frame.width, rgb_frame.height), rgb_frame.data)
+            
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG")
+            base64_image = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+            return identify_currency_global(base64_image)
+        finally:
+            await video_stream.aclose()
+
+    @function_tool
+    async def trigger_emergency_sos(self, ctx: RunContext) -> str:
+        """
+        Activates emergency mode and sends the user's location to their family via email.
+        Use this tool when the user says "Help me", "SOS", "I need help", or "Emergency".
+        """
+        logger.info("Emergency Tool activated via voice.")
+        return send_emergency_sos(precise_coords=self.latest_coords)
+    
 
 # Phase 1 — Startup (runs once when the agent process boots)
     # entrypoint() is called by LiveKit. It registers the user with the backend, creates an empty Assistant object, 
-    # and starts the AgentSession wiring together Groq, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
+    # and starts the AgentSession wiring together DeepSeek, Azure STT, Azure TTS, and Silero VAD. Nothing is talking yet.
 
 # Phase 2 — Participant joins (runs once per user connection)
     # When a user connects to the LiveKit room, on_participant_connected fires. 
     # It creates a ConversationCache for that user, fetches their past conversation history from the backend, 
-    # and injects it into a ChatContext so Groq starts the conversation already knowing what was said before.
+    # and injects it into a ChatContext so DeepSeek starts the conversation already knowing what was said before.
 
 # Phase 3 — Conversation loop (runs every time the user speaks)
-    # Azure STT transcribes the user's voice. Groq reads the transcript and decides: 
+    # Azure STT transcribes the user's voice. DeepSeek reads the transcript and decides: 
     # does this need a tool, or can I answer directly? If a tool is needed (file, camera, time, UI control),
-    # it calls it and feeds the result back to itself. Either way, Groq produces a text response which Azure TTS speaks back to the user.
+    # it calls it and feeds the result back to itself. Either way, DeepSeek produces a text response which Azure TTS speaks back to the user.
 # Phase 4 — Persistence (after every response)
     # on_conversation_item_added saves both the user message and agent reply to ConversationCache. 
     # Once 5 pairs accumulate, it flushes them to the backend — then the loop waits for the next thing the user says.
@@ -242,6 +364,11 @@ async def entrypoint(ctx: agents.JobContext):
 
     async def on_participant_connected(ctx: agents.JobContext, participant: rtc.RemoteParticipant):
         logger.info(f"Participant {participant.identity} joined the room")
+        
+        # Đảm bảo user (frontend) đã tồn tại trong DB để có thể đăng nhập/lưu lịch sử
+        if not ensure_user_exists(participant.identity):
+            logger.warning(f"Could not register or login participant {participant.identity}.")
+
         temp_cache = ConversationCache(
             username=participant.identity, pairs_to_flush=int(PAIRS_TO_FLUSH)
         )
@@ -268,6 +395,16 @@ async def entrypoint(ctx: agents.JobContext):
         await assistant.update_chat_ctx(initial_ctx)
         assistant.update_context(assistant.cache.username)
 
+        @ctx.room.on("data_received")
+        def on_data_received(data: rtc.DataPacket):
+            try:
+                payload = json.loads(data.data)
+                if payload.get("type") == "location_update":
+                    assistant.latest_coords = payload.get("data")
+                    logger.info(f"✅ Received GPS coordinates: {assistant.latest_coords}")
+            except Exception as e:
+                logger.error(f"Error parsing frontend data: {e}")
+
     def on_participant_disconnected(participant: rtc.RemoteParticipant):
         logger.info(f"Participant disconnected: {participant.identity}")
         if (assistant.cache):
@@ -275,38 +412,41 @@ async def entrypoint(ctx: agents.JobContext):
 
     ctx.add_participant_entrypoint(entrypoint_fnc=on_participant_connected)
     ctx.room.on("participant_disconnected", on_participant_disconnected)
-
-    if (username is None) or (username.strip() == ""):
-        logger.error("AGENT_LOGIN_USERNAME is not set in environment variables.")
-        return
-    
-
-    if not ensure_user_exists(username):
-        logger.error(
-            "Cannot initialize assistant because user registration/login failed."
-        )
     
     assistant = Assistant()
-
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    if not groq_api_key:
-        logger.error("GROQ_API_KEY is not set in environment variables.")
+    
+    deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not deepseek_api_key:
+        logger.error("DEEPSEEK_API_KEY is not set in environment variables.")
         return
+
+    voice_model = (
+        os.environ.get("DEEPSEEK_VOICE_MODEL")
+        or os.environ.get("DEEPSEEK_MODEL")
+        or "deepseek-chat"
+    )
+    lowered_voice_model = voice_model.lower()
+    if "reasoner" in lowered_voice_model or lowered_voice_model.startswith("deepseek-v4"):
+        logger.warning(
+            f"Model '{voice_model}' can trigger thinking-mode incompatibilities; switching voice model to 'deepseek-chat'."
+        )
+        voice_model = "deepseek-chat"
 
     session = AgentSession(
         stt=azure.STT(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        llm=groq.LLM(
-            api_key=groq_api_key,
-            model=os.environ.get("GROQ_AGENT_MODEL", "llama-3.3-70b-versatile"),
+        llm=openai.LLM(
+            base_url="https://api.deepseek.com",
+            api_key=deepseek_api_key,
+            model=voice_model,
         ),
         tts=azure.TTS(
             speech_key=os.environ.get("AZURE_SPEECH_KEY"),
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
-        vad=silero.VAD.load(min_silence_duration=2.0),
+        vad=silero.VAD.load(min_silence_duration=0.8),
     )
 
     @session.on("conversation_item_added")
@@ -314,15 +454,32 @@ async def entrypoint(ctx: agents.JobContext):
         # async without blocking main thread
         async def async_handler():
             if assistant.cache is None:
-                logger.warning("Conversation cache is not initialized yet; skipping persistence.")
-                return
+                room = get_job_context().room
+                participant = next(iter(room.remote_participants.values()), None)
+                if participant:
+                    assistant.cache = ConversationCache(
+                        username=participant.identity,
+                        pairs_to_flush=int(PAIRS_TO_FLUSH),
+                    )
+                    assistant.update_context(participant.identity)
+                    logger.info(
+                        f"Conversation cache initialized lazily for {participant.identity}."
+                    )
+                else:
+                    logger.debug(
+                        "Skipping persistence because no remote participant is connected yet."
+                    )
+                    return
             
             role = event.item.role
             text_contents = event.item.text_content
             print(f"Conversation item added from {role}: {text_contents}. \
                   interrupted: {event.item.interrupted}")
 
-            new_ctx = assistant.chat_ctx.copy()
+            # NOTE: Do NOT manually update chat_ctx here.
+            # LiveKit's AgentSession already manages chat_ctx internally.
+            # Doing so causes every message to be appended twice, producing duplicated responses.
+            # This handler is only for persistence (cache + backend).
 
             # to iterate over all types of content:
             for content in event.item.content:
@@ -330,21 +487,17 @@ async def entrypoint(ctx: agents.JobContext):
                     if role == "user":
                         # USER input text
                         logger.info(f"[USER] {content}")
-                        assistant.cache.add_user_message(content)
+                        assistant.cache.add_user_message(content[:800])
                     elif role == "assistant":
                         # AGENT response text
                         logger.info(f"[AGENT] {content}")
-                        assistant.cache.add_agent_message(content)
-                    new_ctx.add_message(role=role, content=content)
+                        assistant.cache.add_agent_message(content[:800])
                 elif isinstance(content, ImageContent):
-                    # image is either a rtc.VideoFrame or URL to the image
                     print(f" - image: {content.image}")
                 elif isinstance(content, AudioContent):
-                    # frame is a list[rtc.AudioFrame]
                     print(
                         f" - audio: {content.frame}, transcript: {content.transcript}"
                     )
-            await assistant.update_chat_ctx(new_ctx)
             assistant.update_context(assistant.cache.username)
             print("Updated context pairs:", assistant.context_pairs)
 
@@ -359,9 +512,11 @@ async def entrypoint(ctx: agents.JobContext):
     await session.start(
         room=ctx.room,
         agent=assistant,
-        room_input_options=RoomInputOptions(
-            video_enabled=True,
-            noise_cancellation=noise_cancellation.BVC(), 
+        room_options=RoomOptions(
+            video_input=True,
+            audio_input=AudioInputOptions(
+                noise_cancellation=noise_cancellation.BVC(),
+            ),
         ),
     )
 

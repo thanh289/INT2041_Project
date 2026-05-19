@@ -11,7 +11,6 @@ load_dotenv()
 # New version: we keep an in-memory cache of messages, and only flush to backend when we have accumulated a certain number of pairs (user+bot). 
 # This reduces the number of API calls and allows us to keep more context in memory for the agent to use.
 
-ENABLE_BACKEND = os.getenv("ENABLE_BACKEND", "true").lower() == "true"
 BACKEND_BASE = os.getenv("BACKEND_BASE_URL")  # chỉnh nếu khác
 LOGIN_USERNAME = os.getenv("AGENT_LOGIN_USERNAME")  # tạo account này trong backend
 # Nếu backend yêu cầu password, chỉnh code và DTO. (current backend LoginDto chỉ has Username)
@@ -49,7 +48,7 @@ class ConversationCache:
             raise RuntimeError("Login did not return token. Response: " + str(data))
         self._token = token
         # set expiry to +1 hour by default (adjust as needed)
-        self._token_expiry = time.time() + 3600
+        self._token_expiry = time.time() + 30 * 60
 
     def _auth_headers(self) -> Dict[str, str]:
         self._login_if_needed()
@@ -61,8 +60,6 @@ class ConversationCache:
         Fetch conversation history (all messages) from backend for the logged-in user.
         Returns list of message DTOs (MessageDto) or [].
         """
-        if not ENABLE_BACKEND or not BACKEND_BASE:
-            return []
         limit = 2*self.pairs_to_flush
         url = f"{BACKEND_BASE}/api/conversation-history?limit={limit}"
         resp = self.session.get(url, headers=self._auth_headers(), timeout=10)
@@ -75,10 +72,8 @@ class ConversationCache:
     def post_messages(self, messages: List[Dict]) -> List[Dict]:
         """
         Send list of CreateMessageDto to backend. Returns created messages.
-        Each message: { "senderType": int, "content": str, "createdAt": "2025-11-15T..."}
+        Each message: { "SenderType": int, "Content": str, "CreatedAt": "2025-11-15T..."}
         """
-        if not ENABLE_BACKEND or not BACKEND_BASE:
-            return []
         if not messages:
             return []
         url = f"{BACKEND_BASE}/api/messages"
@@ -87,24 +82,24 @@ class ConversationCache:
         return resp.json()
 
     # --- Cache operations ---
-    def add_user_message(self, content: str, created_at: Optional[datetime] = None):
+    def add_user_message(self, Content: str, created_at: Optional[datetime] = None):
         created_at = created_at or datetime.now(timezone.utc)
         dto = {
-            "senderType": 0,
-            "content": content,
-            "createdAt": created_at.isoformat()
+            "SenderType": 0,
+            "Content": Content,
+            "CreatedAt": created_at.isoformat()
         }
         self._pending_messages.append(dto)
         # don't increment pair yet; pair completes when agent adds response
         # but for simplification, we can mark that a user message is added
         return dto
 
-    def add_agent_message(self, content: str, created_at: Optional[datetime] = None):
+    def add_agent_message(self, Content: str, created_at: Optional[datetime] = None):
         created_at = created_at or datetime.now(timezone.utc)
         dto = {
-            "senderType": 1,
-            "content": content,
-            "createdAt": created_at.isoformat()
+            "SenderType": 1,
+            "Content": Content,
+            "CreatedAt": created_at.isoformat()
         }
         self._pending_messages.append(dto)
         # a full pair just completed (user + agent)
@@ -139,7 +134,7 @@ class ConversationCache:
     #     # messages are presumably ordered by CreatedAt ascending (check ordering, else sort)
     #     # ensure ordering:
     #     def key_fn(m):
-    #         return m.get("createdAt") or m.get("CreatedAt") or ""
+    #         return m.get("CreatedAt") or m.get("CreatedAt") or ""
     #     try:
     #         messages_sorted = sorted(messages, key=lambda m: key_fn(m))
     #     except Exception:
@@ -154,8 +149,8 @@ class ConversationCache:
     #         a = tail[i]
     #         b = tail[i + 1]
     #         # ensure a is user and b is bot; if not, try to align by scanning
-    #         if a.get("senderType", a.get("SenderType", None)) == 0 and b.get("senderType", b.get("SenderType", None)) == 1:
-    #             pairs.append({"user": a.get("content") or a.get("Content"), "bot": b.get("content") or b.get("Content")})
+    #         if a.get("SenderType", a.get("SenderType", None)) == 0 and b.get("SenderType", b.get("SenderType", None)) == 1:
+    #             pairs.append({"user": a.get("Content") or a.get("Content"), "bot": b.get("Content") or b.get("Content")})
     #             i += 2
     #         else:
     #             # shift by 1 to try align
@@ -205,7 +200,7 @@ class ConversationCache:
 
         # Sort messages by CreatedAt
         def key_fn(m): 
-            return m.get("createdAt") or ""
+            return m.get("CreatedAt") or ""
         messages_sorted = sorted(messages, key=key_fn)
 
         # Take exactly needed pairs → 2*needed messages
@@ -222,9 +217,9 @@ class ConversationCache:
         i = 0
         while i + 1 < len(msgs):
             a, b = msgs[i], msgs[i+1]
-            if (a.get("senderType") == 0 
-                and b.get("senderType") == 1):
-                pairs.append({"user": a["content"], "bot": b["content"]})
+            if (a.get("SenderType") == 0 
+                and b.get("SenderType") == 1):
+                pairs.append({"user": a["Content"], "bot": b["Content"]})
                 i += 2
             else:
                 i += 1
