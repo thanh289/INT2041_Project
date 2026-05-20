@@ -1,26 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { LiveKitRoom, RoomAudioRenderer, useRemoteParticipants } from "@livekit/components-react";
+import { useEffect, useState, useMemo, FormEvent } from "react";
+import { 
+  LiveKitRoom, 
+  RoomAudioRenderer, 
+  useRemoteParticipants,
+  useLocalParticipant,
+  useVoiceAssistant,
+  VideoTrack
+} from "@livekit/components-react";
 import "@livekit/components-styles";
+import { Mic, MicOff, Camera, CameraOff, Send } from "lucide-react";
+import AudioVisualizer from "./AudioVisualizer";
+import { Track } from "livekit-client";
 import AgentWorkspace from "./AgentWorkspace";
 
-function RoomHeader() {
-  const remoteParticipants = useRemoteParticipants();
-  const agentParticipant = remoteParticipants.length > 0 ? remoteParticipants[0] : null;
-
-  return (
-    <div className="w-full bg-black/40 backdrop-blur-md border-b border-white/5 py-4 px-6 flex items-center justify-center shadow-md z-20">
-      <h2 
-        className={`text-2xl md:text-3xl font-extrabold tracking-widest drop-shadow-lg transition-colors duration-500 uppercase ${agentParticipant ? 'text-cyan-400' : 'text-gray-400'}`}
-        aria-live="polite"
-      >
-        {agentParticipant ? "ASSISTANT ACTIVE" : "WAITING FOR ASSISTANT..."}
-      </h2>
-    </div>
-  );
-}
-
+// --- MAIN WRAPPER COMPONENT ---
 export default function LiveKitRoomWrapper({
   roomName,
   username,
@@ -42,7 +37,7 @@ export default function LiveKitRoomWrapper({
           setToken(data.token);
         }
       } catch (e) {
-        console.error("Lỗi khi lấy token:", e);
+        console.error("Token fetch error:", e);
       }
     };
     fetchToken();
@@ -54,34 +49,33 @@ export default function LiveKitRoomWrapper({
   if (!token) {
     return (
       <div 
-        className="flex items-center justify-center min-h-screen text-4xl text-yellow-400 font-bold"
+        className="flex items-center justify-center min-h-screen text-4xl md:text-6xl text-yellow-400 bg-black font-black uppercase tracking-widest w-full"
         aria-live="polite"
       >
-        Đang cấu hình hệ thống, vui lòng chờ...
+        <span className="animate-pulse drop-shadow-[0_0_30px_rgba(250,204,21,0.8)]">Starting Session...</span>
       </div>
     );
   }
 
-  // Kết nối với server LiveKit
   return (
     <LiveKitRoom
-      video={false}
+      video={true} 
       audio={true}
       token={token}
       serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
       data-lk-theme="default"
-      className="h-screen w-full font-sans flex flex-col bg-black text-white relative"
+      className="h-screen w-full font-sans flex flex-col bg-black text-white relative overflow-hidden"
       onConnected={() => {
-        console.log("Đã kết nối vào phòng!");
+        console.log("Connected to room!");
         const beep = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...");
         beep.play().catch(e => console.log(e));
       }}
     >
       <RoomAudioRenderer />
       
-      <RoomHeader />
-
+      {/* Delegating layout and tab management to AgentWorkspace */}
       <AgentWorkspace />
+
     </LiveKitRoom>
   );
 }
