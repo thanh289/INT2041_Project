@@ -228,7 +228,7 @@ function BottomNav({
         flexShrink: 0,
         display: "flex",
         justifyContent: "center",
-        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
+        backgroundImage: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
         borderTop: "3px solid rgba(9,141,113,0.3)",
         paddingTop: "0.875rem",
       }}
