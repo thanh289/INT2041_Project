@@ -279,8 +279,8 @@ function FilesTab() {
   };
 
   return (
-    <div className="flex w-full h-full p-6 items-center justify-center">
-      <div className="w-full max-w-4xl bg-[#0a0a0a] rounded-[3rem] border-[6px] border-white/20 p-12 shadow-2xl flex flex-col items-center text-center">
+    <div className="flex w-full h-full px-6 py-10 md:py-16 items-center justify-center">
+      <div className="w-full max-w-5xl bg-[#0a0a0a] rounded-[3rem] border-[6px] border-white/20 p-10 md:p-12 shadow-2xl flex flex-col items-center text-center gap-8">
         <FileText className="h-40 w-40 text-emerald-400 mb-8" />
         <h3 className="text-5xl font-black text-white uppercase tracking-wider mb-6">
           File Assistant
@@ -290,7 +290,7 @@ function FilesTab() {
         </p>
 
         <label
-          className="w-full flex-col flex items-center justify-center p-16 rounded-[2rem] border-[8px] border-dashed border-emerald-500/50 hover:border-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 cursor-pointer transition-all duration-300 hover:scale-[1.02]"
+          className="w-full max-w-[900px] mx-auto flex-col flex items-center justify-center mt-4 p-12 md:p-16 min-h-[240px] md:min-h-[300px] rounded-[2rem] border-[8px] border-dashed border-emerald-500/50 hover:border-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 cursor-pointer transition-all duration-300 hover:scale-[1.02]"
           tabIndex={0}
           role="button"
           aria-label="Upload file to read"
@@ -354,22 +354,24 @@ function EmergencyTab() {
   };
 
   return (
-    <div className="flex w-full h-full p-6 items-center justify-center">
-      <div className="w-full max-w-4xl bg-red-950/30 rounded-[3rem] border-[8px] border-red-500 p-12 shadow-[0_0_80px_rgba(239,68,68,0.4)] flex flex-col items-center text-center">
-        <AlertTriangle className="h-48 w-48 text-red-500 mb-10 animate-pulse" />
-        <h3 className="text-6xl font-black text-white uppercase tracking-wider mb-8 drop-shadow-md">
-          Rescue Mode
+    <div className="flex w-full h-full px-6 py-10 md:py-16 items-center justify-center">
+      <div className="w-full max-w-3xl bg-black/70 rounded-[2rem] border-2 border-red-500 p-8 md:p-12 flex flex-col items-center text-center gap-6">
+        <AlertTriangle className="h-14 w-14 md:h-16 md:w-16 text-red-400" />
+
+        <h3 className="text-3xl md:text-4xl font-black text-white tracking-wide">
+          Emergency SOS
         </h3>
-        <p className="text-4xl text-red-200 font-bold mb-12 leading-tight">
-          Instantly gather location and alert emergency contacts.
+
+        <p className="text-lg md:text-xl text-white/90 font-semibold leading-relaxed max-w-2xl">
+          Tap the button to send your location now.
         </p>
 
         <button
-          className="w-full bg-red-600 hover:bg-red-500 text-white rounded-[2rem] border-b-[12px] border-red-800 p-10 transition-all duration-300 hover:scale-[1.05] active:scale-95 shadow-2xl"
-          aria-label="Trigger SOS Alert"
+          className="w-full max-w-[900px] mx-auto bg-red-600 hover:bg-red-500 text-white rounded-[2rem] px-8 py-12 md:py-16 min-h-[240px] md:min-h-[300px] transition-all duration-200 shadow-[0_0_30px_rgba(239,68,68,0.35)] hover:shadow-[0_0_45px_rgba(239,68,68,0.55)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-400/70"
+          aria-label="Send SOS alert now"
           onClick={triggerSos}
         >
-          <span className="text-6xl font-black uppercase tracking-widest drop-shadow-lg">
+          <span className="text-5xl md:text-6xl font-black tracking-widest">
             SEND SOS
           </span>
         </button>
