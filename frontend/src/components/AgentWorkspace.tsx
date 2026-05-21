@@ -18,6 +18,7 @@ import {
   Home,
   AlertTriangle,
   Upload,
+  Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Track } from "livekit-client";
@@ -27,128 +28,362 @@ import { useAgentEvents } from "../hooks/useAgentEvents";
 
 type TabId = "home" | "chat" | "files" | "emergency";
 
-// --- 1. HEADER (Status Bar) ---
-function TactileHeader() {
+// ─────────────────────────────────────────
+// STATUS HEADER
+// ─────────────────────────────────────────
+function StatusHeader() {
   const remoteParticipants = useRemoteParticipants();
-  const agentParticipant =
-    remoteParticipants.length > 0 ? remoteParticipants[0] : null;
+  const isConnected = remoteParticipants.length > 0;
 
   return (
     <header
-      className="w-full h-24 md:h-32 bg-black border-b-[6px] border-white/20 flex flex-col items-center justify-center px-6 z-20 shrink-0 transition-all"
+      className="w-full shrink-0 z-20"
       role="region"
-      aria-label="Status Bar"
+      aria-label="Trạng thái kết nối"
+      style={{
+        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
+        borderBottom: "3px solid rgba(9,141,113,0.4)",
+        padding: "1rem 1.5rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1rem",
+      }}
     >
-      <h2
-        className={`text-4xl md:text-6xl font-black tracking-widest uppercase transition-colors duration-500 text-center ${agentParticipant
-            ? "text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.5)]"
-            : "text-cyan-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.5)]"
-          }`}
+      {/* Logo */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+        <div style={{
+          width: 40, height: 40,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 12px rgba(9,141,113,0.5)",
+          flexShrink: 0,
+        }}>
+          <Eye size={22} color="#fff" aria-hidden="true" />
+        </div>
+        <span style={{
+          fontFamily: "'Atkinson Hyperlegible', sans-serif",
+          fontSize: "1.25rem",
+          fontWeight: 700,
+          color: "#fff",
+          letterSpacing: "0.05em",
+        }}>
+          Vision Assistant
+        </span>
+      </div>
+
+      {/* Status pill */}
+      <div
+        role="status"
         aria-live="polite"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          padding: "0.45rem 1rem",
+          borderRadius: 9999,
+          background: isConnected ? "rgba(9,141,113,0.2)" : "rgba(255,255,255,0.08)",
+          border: `2px solid ${isConnected ? "var(--color-primary)" : "rgba(255,255,255,0.2)"}`,
+          fontSize: "0.9rem",
+          fontWeight: 700,
+          color: isConnected ? "#7dd3fc" : "rgba(255,255,255,0.6)",
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+        }}
       >
-        {agentParticipant ? "AGENT CONNECTED" : "WAITING FOR AGENT..."}
-      </h2>
+        <span style={{
+          width: 8, height: 8,
+          borderRadius: "50%",
+          background: isConnected ? "#7dd3fc" : "rgba(255,255,255,0.3)",
+          flexShrink: 0,
+          ...(isConnected ? { animation: "pulse-dot 2s ease-in-out infinite" } : {}),
+        }} />
+        {isConnected ? "Đã kết nối" : "Đang chờ..."}
+      </div>
+
+      <style>{`
+        @keyframes pulse-dot {
+          0%,100% { opacity:1; transform:scale(1); }
+          50%      { opacity:0.6; transform:scale(1.3); }
+        }
+      `}</style>
     </header>
   );
 }
 
-// --- TAB NAVIGATION ---
-function TabNavigation({
+// ─────────────────────────────────────────
+// MIC / CAM CONTROL BAR (above bottom nav)
+// ─────────────────────────────────────────
+function ControlBar() {
+  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } = useLocalParticipant();
+
+  const toggleMic = () => localParticipant?.setMicrophoneEnabled(!isMicrophoneEnabled);
+  const toggleCam = () => localParticipant?.setCameraEnabled(!isCameraEnabled);
+
+  return (
+    <div style={{
+      display: "flex",
+      gap: "0.75rem",
+      padding: "0.875rem 1rem",
+      background: "rgba(30,61,51,0.95)",
+      borderTop: "2px solid rgba(9,141,113,0.3)",
+      flexShrink: 0,
+      zIndex: 20,
+    }}
+      role="region"
+      aria-label="Điều khiển mic và camera"
+    >
+      {/* Mic button */}
+      <button
+        onClick={toggleMic}
+        aria-label={isMicrophoneEnabled ? "Microphone đang bật. Nhấn để tắt." : "Microphone đang tắt. Nhấn để bật."}
+        style={{
+          flex: 1,
+          minHeight: 72,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.75rem",
+          borderRadius: 16,
+          border: `3px solid ${isMicrophoneEnabled ? "var(--color-primary)" : "rgba(239,68,68,0.5)"}`,
+          background: isMicrophoneEnabled
+            ? "linear-gradient(135deg, rgba(9,141,113,0.25), rgba(9,141,113,0.12))"
+            : "rgba(239,68,68,0.08)",
+          color: isMicrophoneEnabled ? "#7dd3fc" : "#f87171",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          fontFamily: "'Atkinson Hyperlegible', sans-serif",
+          boxShadow: isMicrophoneEnabled ? "0 4px 16px rgba(9,141,113,0.3)" : "none",
+        }}
+      >
+        {isMicrophoneEnabled
+          ? <Mic size={28} aria-hidden="true" />
+          : <MicOff size={28} aria-hidden="true" />}
+        <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+          {isMicrophoneEnabled ? "Mic bật" : "Mic tắt"}
+        </span>
+      </button>
+
+      {/* Camera button */}
+      <button
+        onClick={toggleCam}
+        aria-label={isCameraEnabled ? "Camera đang bật. Nhấn để tắt." : "Camera đang tắt. Nhấn để bật."}
+        style={{
+          flex: 1,
+          minHeight: 72,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.75rem",
+          borderRadius: 16,
+          border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.15)"}`,
+          background: isCameraEnabled
+            ? "linear-gradient(135deg, rgba(9,141,113,0.25), rgba(9,141,113,0.12))"
+            : "rgba(255,255,255,0.04)",
+          color: isCameraEnabled ? "#34d399" : "rgba(255,255,255,0.45)",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          fontFamily: "'Atkinson Hyperlegible', sans-serif",
+          boxShadow: isCameraEnabled ? "0 4px 16px rgba(9,141,113,0.3)" : "none",
+        }}
+      >
+        {isCameraEnabled
+          ? <Camera size={28} aria-hidden="true" />
+          : <CameraOff size={28} aria-hidden="true" />}
+        <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+          {isCameraEnabled ? "Camera bật" : "Camera tắt"}
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// BOTTOM NAVBAR PILL (SightTech MenuBar style)
+// ─────────────────────────────────────────
+function BottomNav({
   activeTab,
   setActiveTab,
 }: {
   activeTab: TabId;
   setActiveTab: (t: TabId) => void;
 }) {
-  const tabs: { id: TabId; label: string; icon: LucideIcon }[] = [
-    { id: "home", label: "Home / Voice", icon: Home },
-    { id: "chat", label: "AI Chat", icon: MessageSquareText },
-    { id: "files", label: "File Reader", icon: FileText },
-    { id: "emergency", label: "Emergency", icon: AlertTriangle },
+  const tabs: { id: TabId; icon: LucideIcon; label: string }[] = [
+    { id: "home", icon: Home, label: "Home" },
+    { id: "chat", icon: MessageSquareText, label: "Chat" },
+    { id: "files", icon: FileText, label: "Files" },
+    { id: "emergency", icon: AlertTriangle, label: "SOS" },
   ];
 
   return (
     <nav
-      className="flex w-full bg-black border-b-[4px] border-white/20 p-4 gap-4 overflow-x-auto shrink-0 z-20"
-      aria-label="Main Navigation"
+      aria-label="Điều hướng chính"
+      style={{
+        position: "relative",
+        zIndex: 30,
+        padding: "0 1rem 1.25rem",
+        background: "transparent",
+        flexShrink: 0,
+        display: "flex",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
+        borderTop: "3px solid rgba(9,141,113,0.3)",
+        paddingTop: "0.875rem",
+      }}
     >
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        const Icon = tab.icon;
+      <div
+        role="menubar"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.625rem",
+          background: "rgba(255,255,255,0.08)",
+          backdropFilter: "blur(16px)",
+          padding: "0.5rem 0.75rem",
+          borderRadius: 9999,
+          border: "1.5px solid rgba(255,255,255,0.15)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2)",
+          width: "100%",
+          maxWidth: 440,
+        }}
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const Icon = tab.icon;
+          const isEmergency = tab.id === "emergency";
 
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            aria-label={`Tab: ${tab.label}`}
-            className={`relative flex-1 min-w-[200px] h-24 md:h-32 flex flex-col items-center justify-center gap-2 rounded-[1.5rem] border-[4px] transition-all duration-300 group ${isActive
-                ? "bg-yellow-400 border-yellow-500 text-black shadow-[0_0_30px_rgba(250,204,21,0.4)]"
-                : "bg-[#111] border-gray-700 text-white hover:bg-[#222] hover:border-gray-500 hover:scale-[1.02]"
-              }`}
-          >
-            <Icon
-              className={`h-10 w-10 md:h-12 md:w-12 transition-transform ${isActive ? "scale-110" : "group-hover:scale-110"}`}
-              aria-hidden="true"
-            />
-            <span className="text-xl md:text-2xl font-black uppercase tracking-wider">
-              {tab.label}
-            </span>
-            {isActive && (
-              <motion.div
-                layoutId="activeTabUnderline"
-                className="absolute bottom-[-10px] w-[80%] h-[8px] bg-white rounded-full shadow-[0_0_20px_white]"
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              role="menuitem"
+              aria-label={tab.label}
+              aria-current={isActive ? "page" : undefined}
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.25rem",
+                padding: "0.625rem 0.25rem",
+                borderRadius: 9999,
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.3s cubic-bezier(0.175,0.885,0.32,1.275)",
+                background: isActive
+                  ? isEmergency
+                    ? "linear-gradient(135deg, #dc2626, #ef4444)"
+                    : "linear-gradient(135deg, var(--color-primary), #38bdf8)"
+                  : "transparent",
+                color: isActive ? "#fff" : isEmergency ? "#f87171" : "rgba(255,255,255,0.55)",
+                boxShadow: isActive
+                  ? isEmergency
+                    ? "0 6px 20px rgba(220,38,38,0.5)"
+                    : "0 6px 20px rgba(9,141,113,0.5)"
+                  : "none",
+                transform: isActive ? "translateY(-4px) scale(1.08)" : "none",
+              }}
+            >
+              <Icon
+                size={isActive ? 26 : 22}
+                aria-hidden="true"
+                style={{ transition: "all 0.3s ease" }}
               />
-            )}
-          </button>
-        );
-      })}
+              <span style={{
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              }}>
+                {tab.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <style>{`
+        nav button:focus-visible {
+          outline: 4px solid #FACC15 !important;
+          outline-offset: 3px;
+        }
+      `}</style>
     </nav>
   );
 }
 
-// --- HOME/VOICE TAB (Vision & Audio) ---
+// ─────────────────────────────────────────
+// HOME TAB
+// ─────────────────────────────────────────
 function HomeTab() {
   const { localParticipant, isCameraEnabled } = useLocalParticipant();
-
-  const cameraPublication = localParticipant?.getTrackPublication(
-    Track.Source.Camera,
-  );
-  const trackRef =
-    localParticipant && cameraPublication
-      ? {
-        participant: localParticipant,
-        source: Track.Source.Camera,
-        publication: cameraPublication,
-      }
-      : null;
+  const cameraPublication = localParticipant?.getTrackPublication(Track.Source.Camera);
+  const trackRef = localParticipant && cameraPublication
+    ? { participant: localParticipant, source: Track.Source.Camera, publication: cameraPublication }
+    : null;
 
   return (
-    <div className="flex-1 w-full h-full p-6 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Massive Audio Visualizer Base */}
-      <div
-        className={`absolute inset-0 z-0 transition-opacity duration-500 flex items-center justify-center ${isCameraEnabled ? "opacity-30 scale-90" : "opacity-100 scale-100"
-          }`}
-      >
+    <div style={{
+      flex: 1, display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "1rem", gap: "1rem", overflow: "hidden",
+      position: "relative",
+    }}>
+      {/* Audio visualizer background */}
+      <div style={{
+        position: "absolute", inset: 0,
+        opacity: isCameraEnabled ? 0.2 : 0.85,
+        transition: "opacity 0.5s ease",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
         <AudioVisualizer />
       </div>
 
-      {/* Camera Feed Card */}
-      <div className="z-10 w-full max-w-5xl aspect-video relative flex items-center justify-center pointer-events-none">
+      {/* Camera / placeholder card */}
+      <div style={{
+        position: "relative", zIndex: 10,
+        width: "100%", maxWidth: 720,
+        borderRadius: 24,
+        overflow: "hidden",
+        border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.1)"}`,
+        boxShadow: isCameraEnabled ? "0 0 40px rgba(9,141,113,0.35)" : "none",
+        background: "#0a1a14",
+        aspectRatio: "16/9",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
         {isCameraEnabled && trackRef ? (
-          <div className="w-full h-full rounded-[3rem] overflow-hidden border-[8px] border-yellow-400 shadow-[0_0_60px_rgba(250,204,21,0.5)] bg-black">
-            <VideoTrack
-              trackRef={trackRef}
-              className="w-full h-full object-cover"
-            />
-          </div>
+          <>
+            {/* Live badge */}
+            <div style={{
+              position: "absolute", top: 12, left: 12, zIndex: 10,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "4px 12px", borderRadius: 9999,
+              background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
+              border: "1.5px solid rgba(9,141,113,0.5)",
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7dd3fc", animation: "pulse-dot 2s ease-in-out infinite" }} />
+              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Vision Active
+              </span>
+            </div>
+            <VideoTrack trackRef={trackRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </>
         ) : (
-          <div className="flex flex-col items-center justify-center w-full h-full bg-black/80 backdrop-blur-xl rounded-[3rem] border-[6px] border-white/20 shadow-2xl">
-            <CameraOff
-              className="h-40 w-40 text-gray-500 mb-8"
-              aria-hidden="true"
-            />
-            <span className="text-5xl md:text-7xl font-black text-gray-400 uppercase tracking-wider">
-              Camera Off
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem",
+            padding: "2rem",
+          }}>
+            <CameraOff size={64} color="rgba(255,255,255,0.25)" aria-hidden="true" />
+            <span style={{
+              fontSize: "1.1rem", fontWeight: 700, color: "rgba(255,255,255,0.35)",
+              letterSpacing: "0.1em", textTransform: "uppercase",
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            }}>
+              Camera đang tắt
             </span>
           </div>
         )}
@@ -157,7 +392,9 @@ function HomeTab() {
   );
 }
 
-// --- AI CHAT TAB ---
+// ─────────────────────────────────────────
+// CHAT TAB
+// ─────────────────────────────────────────
 function ChatTab() {
   const { localParticipant } = useLocalParticipant();
   const { agentTranscriptions } = useVoiceAssistant();
@@ -166,142 +403,233 @@ function ChatTab() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const agentLines = useMemo(
-    () => agentTranscriptions.map((segment) => segment.text).filter(Boolean),
-    [agentTranscriptions],
+    () => agentTranscriptions.map((s) => s.text).filter(Boolean),
+    [agentTranscriptions]
   );
 
-  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const sendMessage = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     const text = message.trim();
     if (!text || !localParticipant) return;
-
     await localParticipant.sendText(text, { topic: "lk.chat" });
-    setSentMessages((current) => [...current, text]);
+    setSentMessages((prev) => [...prev, text]);
     setMessage("");
     setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, 100);
   };
 
   return (
-    <div className="flex flex-col w-full h-full max-w-5xl mx-auto p-6">
+    <div style={{
+      flex: 1, display: "flex", flexDirection: "column",
+      padding: "0.875rem", overflow: "hidden", gap: "0.75rem",
+    }}>
+      {/* Message list */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto space-y-8 flex flex-col bg-[#0a0a0a] rounded-[2rem] border-[4px] border-white/20 p-8 shadow-inner mb-6"
         role="log"
         aria-live="polite"
+        aria-label="Lịch sử trò chuyện"
+        style={{
+          flex: 1, overflowY: "auto", display: "flex", flexDirection: "column",
+          gap: "0.75rem", padding: "1rem",
+          background: "rgba(0,0,0,0.25)",
+          borderRadius: 20,
+          border: "2px solid rgba(9,141,113,0.2)",
+        }}
       >
         {sentMessages.length === 0 && agentLines.length === 0 && (
-          <div className="m-auto text-3xl text-gray-500 font-bold uppercase tracking-widest">
-            No messages yet
+          <div style={{
+            margin: "auto", textAlign: "center",
+            color: "rgba(255,255,255,0.3)", fontWeight: 700,
+            fontSize: "1rem", letterSpacing: "0.06em", textTransform: "uppercase",
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+          }}>
+            Chưa có tin nhắn
           </div>
         )}
 
-        {sentMessages.map((text, index) => (
-          <div
-            key={`user-${index}`}
-            className="ml-auto min-w-[50%] max-w-[90%] rounded-3xl bg-[#111] p-8 border-[4px] border-gray-600 shadow-xl"
-          >
-            <span className="block text-2xl font-black text-gray-400 mb-3 uppercase tracking-wider">
-              You
-            </span>
-            <p className="text-4xl text-white font-bold leading-snug">{text}</p>
+        {sentMessages.map((text, i) => (
+          <div key={`u-${i}`} style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{
+              maxWidth: "80%", padding: "0.75rem 1.1rem",
+              borderRadius: "18px 18px 4px 18px",
+              background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+              boxShadow: "0 4px 12px rgba(9,141,113,0.35)",
+              color: "#fff",
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              fontSize: "1rem", lineHeight: 1.6,
+            }}>
+              {text}
+            </div>
           </div>
         ))}
 
-        {agentLines.map((text, index) => (
-          <div
-            key={`agent-${index}`}
-            className="mr-auto min-w-[50%] max-w-[90%] rounded-3xl bg-yellow-400 p-8 border-[6px] border-yellow-500 shadow-[0_10px_40px_rgba(250,204,21,0.4)] text-black"
-          >
-            <span className="block text-2xl font-black mb-3 uppercase tracking-wider text-yellow-900">
-              Assistant
-            </span>
-            <p className="text-4xl text-black font-extrabold leading-snug">
+        {agentLines.map((text, i) => (
+          <div key={`a-${i}`} style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{
+              maxWidth: "80%", padding: "0.75rem 1.1rem",
+              borderRadius: "18px 18px 18px 4px",
+              background: "rgba(255,255,255,0.08)",
+              border: "2px solid rgba(9,141,113,0.3)",
+              color: "#fff",
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              fontSize: "1rem", lineHeight: 1.6,
+            }}>
+              <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Trợ lý
+              </span>
               {text}
-            </p>
+            </div>
           </div>
         ))}
       </div>
 
-      <form onSubmit={sendMessage} className="flex gap-4 md:gap-6 shrink-0">
+      {/* Input */}
+      <form
+        onSubmit={sendMessage}
+        style={{ display: "flex", gap: "0.625rem", flexShrink: 0 }}
+      >
         <input
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          className="flex-1 rounded-[2rem] bg-[#111] border-[6px] border-white/30 px-10 py-6 text-4xl text-white font-bold placeholder:text-gray-500 focus:outline-none focus:border-cyan-400 focus:ring-[10px] focus:ring-cyan-400/50 transition-all shadow-2xl"
-          placeholder="Type your message..."
-          aria-label="Text input to chat with AI"
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Nhập tin nhắn..."
+          aria-label="Nhập tin nhắn để chat với AI"
+          style={{
+            flex: 1, padding: "0.875rem 1.25rem",
+            borderRadius: 14,
+            background: "rgba(255,255,255,0.07)",
+            border: "2px solid rgba(9,141,113,0.35)",
+            color: "#fff",
+            fontSize: "1rem",
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            outline: "none",
+            transition: "border-color 0.2s",
+          }}
+          onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
+          onBlur={(e) => (e.target.style.borderColor = "rgba(9,141,113,0.35)")}
         />
         <button
           type="submit"
-          className="flex items-center justify-center rounded-[2rem] bg-cyan-400 text-black px-10 py-6 font-black transition-all hover:scale-[1.03] hover:bg-cyan-300 active:scale-95 border-b-[10px] border-cyan-600 hover:border-cyan-500 min-w-[200px]"
-          aria-label="Send Message"
+          aria-label="Gửi tin nhắn"
+          style={{
+            padding: "0 1.25rem",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+            border: "none",
+            color: "#fff",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 14px rgba(9,141,113,0.4)",
+            transition: "transform 0.15s, box-shadow 0.15s",
+            minWidth: 52,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget.style.transform = "scale(1.05)"); }}
+          onMouseLeave={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
         >
-          <Send className="h-12 w-12 md:mr-4" />
-          <span className="hidden md:inline text-4xl tracking-widest uppercase">
-            Send
-          </span>
+          <Send size={22} aria-hidden="true" />
         </button>
       </form>
     </div>
   );
 }
 
-// --- FILE ASSISTANT TAB ---
+// ─────────────────────────────────────────
+// FILES TAB
+// ─────────────────────────────────────────
 function FilesTab() {
   const { localParticipant } = useLocalParticipant();
-  const [status, setStatus] = useState<string>("Ready to upload");
+  const [status, setStatus] = useState("Sẵn sàng nhận file");
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file || !localParticipant) return;
-
-    setStatus(`Processing: ${file.name}...`);
-    // Placeholder logic - actual parsing logic needed based on file type
+    setStatus(`Đang xử lý: ${file.name}...`);
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = async () => {
       try {
-        const textContent = `File Uploaded: ${file.name}. Asking AI to summarize...`;
-        await localParticipant.sendText(textContent, { topic: "lk.chat" });
-        setStatus(`Sent to AI: ${file.name}`);
-      } catch (err) {
-        console.error(err);
-        setStatus("Error sending file data to AI.");
+        await localParticipant.sendText(`File đã tải lên: ${file.name}. Tóm tắt nội dung giúp tôi.`, { topic: "lk.chat" });
+        setStatus(`Đã gửi: ${file.name}`);
+      } catch {
+        setStatus("Lỗi khi gửi file đến AI.");
       }
     };
-    reader.readAsText(file); // Only works for plain text. Real PDFs require parsing.
+    reader.readAsText(file);
   };
 
   return (
-    <div className="flex w-full h-full px-6 py-10 md:py-16 items-center justify-center">
-      <div className="w-full max-w-5xl bg-[#0a0a0a] rounded-[3rem] border-[6px] border-white/20 p-10 md:p-12 shadow-2xl flex flex-col items-center text-center gap-8">
-        <FileText className="h-40 w-40 text-emerald-400 mb-8" />
-        <h3 className="text-5xl font-black text-white uppercase tracking-wider mb-6">
-          File Assistant
-        </h3>
-        <p className="text-3xl text-gray-400 font-bold mb-12">
-          Upload a text file or PDF to have the Assistant read and summarize it.
-        </p>
+    <div style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "1rem",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 560,
+        background: "rgba(0,0,0,0.2)",
+        border: "3px solid rgba(9,141,113,0.35)",
+        borderRadius: 24,
+        padding: "2rem 1.5rem",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
+        textAlign: "center",
+      }}>
+        <div style={{
+          width: 80, height: 80, borderRadius: "50%",
+          background: "rgba(9,141,113,0.15)",
+          border: "3px solid rgba(9,141,113,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <FileText size={38} color="#7dd3fc" aria-hidden="true" />
+        </div>
+
+        <div>
+          <h2 style={{
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "1.375rem", fontWeight: 700, color: "#fff",
+            letterSpacing: "0.04em", marginBottom: "0.5rem",
+          }}>
+            Trợ lý đọc file
+          </h2>
+          <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
+            Tải lên file văn bản để AI đọc và tóm tắt nội dung cho bạn.
+          </p>
+        </div>
 
         <label
-          className="w-full max-w-[900px] mx-auto flex-col flex items-center justify-center mt-4 p-12 md:p-16 min-h-[240px] md:min-h-[300px] rounded-[2rem] border-[8px] border-dashed border-emerald-500/50 hover:border-emerald-400 bg-emerald-950/20 hover:bg-emerald-900/30 cursor-pointer transition-all duration-300 hover:scale-[1.02]"
           tabIndex={0}
           role="button"
-          aria-label="Upload file to read"
+          aria-label="Tải file lên để đọc"
+          style={{
+            width: "100%", minHeight: 140,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: "0.75rem",
+            borderRadius: 18,
+            border: "3px dashed rgba(9,141,113,0.5)",
+            background: "rgba(9,141,113,0.06)",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            padding: "1.5rem",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget.style.background = "rgba(9,141,113,0.12)");
+            (e.currentTarget.style.borderColor = "var(--color-primary)");
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget.style.background = "rgba(9,141,113,0.06)");
+            (e.currentTarget.style.borderColor = "rgba(9,141,113,0.5)");
+          }}
         >
-          <Upload className="h-24 w-24 text-emerald-400 mb-6" />
-          <span className="text-4xl font-black text-emerald-400 uppercase tracking-widest">
+          <Upload size={36} color="#7dd3fc" aria-hidden="true" />
+          <span style={{
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "1rem", fontWeight: 700, color: "#7dd3fc",
+            letterSpacing: "0.06em", textTransform: "uppercase",
+          }}>
             {status}
           </span>
           <input
             type="file"
-            className="hidden"
-            accept=".txt,.md,.json,.csv" // Expanding later to PDF/DOCX
+            accept=".txt,.md,.json,.csv"
             onChange={handleFileUpload}
+            style={{ display: "none" }}
           />
         </label>
       </div>
@@ -309,144 +637,104 @@ function FilesTab() {
   );
 }
 
-// --- EMERGENCY TAB ---
+// ─────────────────────────────────────────
+// EMERGENCY TAB
+// ─────────────────────────────────────────
 function EmergencyTab() {
   const { localParticipant } = useLocalParticipant();
 
   const triggerSos = async () => {
-    const beep = new Audio(
-      "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...",
-    );
-    beep.play().catch(() => { });
-
     if (!localParticipant) {
-      alert("Cannot send SOS: not connected to the assistant yet.");
+      alert("Chưa kết nối với trợ lý.");
       return;
     }
-
     let coords: unknown = null;
     const coordsStr = localStorage.getItem("user_coords");
     if (coordsStr) {
-      try {
-        coords = JSON.parse(coordsStr);
-      } catch {
-        coords = null;
-      }
+      try { coords = JSON.parse(coordsStr); } catch { /* ignore */ }
     }
-
     try {
-      const payload = {
-        type: "sos_trigger",
-        data: coords,
-      };
-      const encoder = new TextEncoder();
+      const payload = { type: "sos_trigger", data: coords };
       await localParticipant.publishData(
-        encoder.encode(JSON.stringify(payload)),
-        { reliable: true },
+        new TextEncoder().encode(JSON.stringify(payload)),
+        { reliable: true }
       );
-      alert("SOS triggered. Emergency contact is being notified.");
-    } catch (err) {
-      console.error("Failed to send SOS trigger:", err);
-      alert("Failed to send SOS. Please try again.");
+      alert("SOS đã được gửi. Đang thông báo người liên hệ khẩn cấp.");
+    } catch {
+      alert("Gửi SOS thất bại. Vui lòng thử lại.");
     }
   };
 
   return (
-    <div className="flex w-full h-full px-6 py-10 md:py-16 items-center justify-center">
-      <div className="w-full max-w-3xl bg-black/70 rounded-[2rem] border-2 border-red-500 p-8 md:p-12 flex flex-col items-center text-center gap-6">
-        <AlertTriangle className="h-14 w-14 md:h-16 md:w-16 text-red-400" />
+    <div style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "1rem",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 480,
+        background: "rgba(0,0,0,0.25)",
+        border: "3px solid rgba(239,68,68,0.4)",
+        borderRadius: 24,
+        padding: "2rem 1.5rem",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
+        textAlign: "center",
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: "rgba(239,68,68,0.12)",
+          border: "3px solid rgba(239,68,68,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <AlertTriangle size={34} color="#f87171" aria-hidden="true" />
+        </div>
 
-        <h3 className="text-3xl md:text-4xl font-black text-white tracking-wide">
-          Emergency SOS
-        </h3>
-
-        <p className="text-lg md:text-xl text-white/90 font-semibold leading-relaxed max-w-2xl">
-          Tap the button to send your location now.
-        </p>
+        <div>
+          <h2 style={{
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "1.375rem", fontWeight: 700, color: "#fff",
+            marginBottom: "0.5rem",
+          }}>
+            Khẩn cấp SOS
+          </h2>
+          <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
+            Nhấn nút bên dưới để gửi vị trí và thông báo khẩn cấp.
+          </p>
+        </div>
 
         <button
-          className="w-full max-w-[900px] mx-auto bg-red-600 hover:bg-red-500 text-white rounded-[2rem] px-8 py-12 md:py-16 min-h-[240px] md:min-h-[300px] transition-all duration-200 shadow-[0_0_30px_rgba(239,68,68,0.35)] hover:shadow-[0_0_45px_rgba(239,68,68,0.55)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-400/70"
-          aria-label="Send SOS alert now"
           onClick={triggerSos}
+          aria-label="Gửi tín hiệu SOS ngay bây giờ"
+          style={{
+            width: "100%", minHeight: 120,
+            borderRadius: 20,
+            border: "3px solid rgba(220,38,38,0.7)",
+            background: "linear-gradient(135deg, #dc2626, #ef4444)",
+            color: "#fff",
+            cursor: "pointer",
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "2rem", fontWeight: 700,
+            letterSpacing: "0.12em", textTransform: "uppercase",
+            boxShadow: "0 8px 32px rgba(220,38,38,0.45)",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
+          onMouseLeave={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
+          onMouseDown={(e) => { (e.currentTarget.style.transform = "scale(0.98)"); }}
+          onMouseUp={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
         >
-          <span className="text-5xl md:text-6xl font-black tracking-widest">
-            SEND SOS
-          </span>
+          GỬI SOS
         </button>
       </div>
     </div>
   );
 }
 
-// --- FOOTER (Control Bar) ---
-function TactileFooter() {
-  const { localParticipant, isMicrophoneEnabled, isCameraEnabled } =
-    useLocalParticipant();
-
-  const toggleMic = async () => {
-    await localParticipant?.setMicrophoneEnabled(!isMicrophoneEnabled);
-  };
-
-  const toggleCamera = async () => {
-    await localParticipant?.setCameraEnabled(!isCameraEnabled);
-  };
-
-  return (
-    <footer
-      className="w-full bg-black border-t-[6px] border-white/20 p-6 flex flex-wrap items-center justify-center gap-6 shrink-0 z-20"
-      role="region"
-      aria-label="Global Controls"
-    >
-      <button
-        onClick={toggleMic}
-        className={`flex min-h-[120px] flex-1 max-w-[400px] items-center justify-center gap-6 rounded-[2rem] border-[6px] transition-all duration-300 ${isMicrophoneEnabled
-            ? "border-yellow-400 bg-yellow-400 text-black shadow-[0_0_50px_rgba(250,204,21,0.5)] border-b-[12px] border-b-yellow-600 hover:bg-yellow-300"
-            : "border-gray-600 bg-[#1a0505] text-red-500 border-b-[12px] border-b-gray-800 hover:bg-[#2a0808]"
-          } hover:scale-[1.04] active:scale-95`}
-        aria-label={
-          isMicrophoneEnabled
-            ? "Microphone ON. Tap to mute."
-            : "Microphone OFF. Tap to unmute."
-        }
-      >
-        {isMicrophoneEnabled ? (
-          <Mic className="h-16 w-16 md:h-20 md:w-20" aria-hidden="true" />
-        ) : (
-          <MicOff className="h-16 w-16 md:h-20 md:w-20" aria-hidden="true" />
-        )}
-        <span className="text-4xl md:text-5xl font-black uppercase tracking-widest">
-          {isMicrophoneEnabled ? "Mic On" : "Mic Off"}
-        </span>
-      </button>
-
-      <button
-        onClick={toggleCamera}
-        className={`flex min-h-[120px] flex-1 max-w-[400px] items-center justify-center gap-6 rounded-[2rem] border-[6px] transition-all duration-300 ${isCameraEnabled
-            ? "border-cyan-400 bg-cyan-400 text-black shadow-[0_0_50px_rgba(34,211,238,0.5)] border-b-[12px] border-b-cyan-600 hover:bg-cyan-300"
-            : "border-gray-600 bg-[#05101a] text-cyan-500 border-b-[12px] border-b-gray-800 hover:bg-[#081a2a]"
-          } hover:scale-[1.04] active:scale-95`}
-        aria-label={
-          isCameraEnabled
-            ? "Camera ON. Tap to turn off."
-            : "Camera OFF. Tap to turn on."
-        }
-      >
-        {isCameraEnabled ? (
-          <Camera className="h-16 w-16 md:h-20 md:w-20" aria-hidden="true" />
-        ) : (
-          <CameraOff className="h-16 w-16 md:h-20 md:w-20" aria-hidden="true" />
-        )}
-        <span className="text-4xl md:text-5xl font-black uppercase tracking-widest">
-          {isCameraEnabled ? "Cam On" : "Cam Off"}
-        </span>
-      </button>
-    </footer>
-  );
-}
-
-// --- MAIN WORKSPACE ---
+// ─────────────────────────────────────────
+// MAIN WORKSPACE
+// ─────────────────────────────────────────
 export default function AgentWorkspace() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
+
   useAgentEvents({
     onModeChange: (mode) => {
       if (mode === "chat") setActiveTab("chat");
@@ -454,26 +742,34 @@ export default function AgentWorkspace() {
       else if (mode === "object_detection") setActiveTab("home");
     },
   });
+
   return (
-    <div className="flex flex-col h-full w-full bg-black relative">
+    <div
+      style={{
+        display: "flex", flexDirection: "column",
+        height: "100%", width: "100%",
+        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 60%, #0f2d4a 100%)",
+        position: "relative", overflow: "hidden",
+      }}
+    >
       <div id="a11y-announcer" aria-live="assertive" className="sr-only" />
 
-      {/* Layer 1: Header */}
-      <TactileHeader />
+      {/* Header */}
+      <StatusHeader />
 
-      {/* Layer 2: Tabs */}
-      <TabNavigation activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* Layer 3: Dynamic Main Content Area */}
-      <main className="flex-1 w-full relative overflow-hidden flex flex-col bg-[#050505]">
+      {/* Main content area */}
+      <main
+        style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}
+        aria-label="Nội dung chính"
+      >
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="absolute inset-0 w-full h-full flex flex-col"
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}
           >
             {activeTab === "home" && <HomeTab />}
             {activeTab === "chat" && <ChatTab />}
@@ -483,8 +779,11 @@ export default function AgentWorkspace() {
         </AnimatePresence>
       </main>
 
-      {/* Layer 4: Global Controls (Always visible) */}
-      <TactileFooter />
+      {/* Mic / Cam controls */}
+      <ControlBar />
+
+      {/* Bottom pill navbar */}
+      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
   );
 }

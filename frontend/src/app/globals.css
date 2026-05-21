@@ -1,22 +1,144 @@
+/* ===========================================
+   globals.css — Vision Assistant
+   Aesthetic: SightTech Natural Green
+   Font: Atkinson Hyperlegible (low-vision)
+   Primary: #098D71 | Dark forest bg
+=========================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #000000;
-  --foreground: #ffffff;
+  /* Core palette */
+  --color-primary:       #0ea5e9;
+  --color-primary-dark:  #0284c7;
+  --color-primary-light: #38bdf8;
+  --color-primary-bg:    #e0f2fe;
+
+  /* Ocean backgrounds */
+  --bg-forest-deep:  #0c1e35;
+  --bg-forest-mid:   #0f2d4a;
+  --bg-forest-light: #163d5f;
+
+  /* Neutral */
+  --color-white:     #ffffff;
+  --color-black:     #000000;
+  --color-gray-100:  #f3f4f6;
+  --color-gray-200:  #e5e7eb;
+  --color-gray-500:  #6b7280;
+  --color-gray-700:  #374151;
+  --color-gray-900:  #111827;
+
+  /* Semantic */
+  --color-success:  #10b981;
+  --color-warning:  #f59e0b;
+  --color-error:    #ef4444;
+
+  /* Focus ring — accessible yellow (giữ vàng để contrast cao trên nền xanh) */
+  --focus-ring: 0 0 0 4px rgba(250, 204, 21, 0.7);
+
+  /* Typography scale — large for low-vision */
+  --font-xs:   0.875rem;
+  --font-sm:   1rem;
+  --font-base: 1.125rem;
+  --font-lg:   1.375rem;
+  --font-xl:   1.625rem;
+  --font-2xl:  2rem;
+  --font-3xl:  2.5rem;
+
+  /* Radii */
+  --radius-sm:   8px;
+  --radius-md:   16px;
+  --radius-lg:   24px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-sm:      0 2px 8px rgba(0,0,0,0.12);
+  --shadow-md:      0 6px 20px rgba(0,0,0,0.18);
+  --shadow-blue:    0 8px 24px rgba(14,165,233,0.35);
+  --shadow-blue-lg: 0 12px 40px rgba(14,165,233,0.45);
+}
+
+/* ---- Base ---- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  /* Kích thước font cực lớn cho người khiếm thị / thị lực kém */
-  font-size: 28px; 
+  font-family: 'Atkinson Hyperlegible', -apple-system, sans-serif;
+  font-size: var(--font-base);
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: var(--color-white);
+  background: var(--bg-forest-deep);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* WCAG 1.4.12 Text Spacing */
+  word-spacing: 0.16em;
 }
 
-/* Tắt các outline mặc định rối mắt, thay bằng outline tương phản cao khi focus */
+/* ---- Focus ---- */
 *:focus-visible {
-  outline: 4px solid #FFFF00 !important;
-  outline-offset: 4px;
+  outline: 4px solid #FACC15 !important;
+  outline-offset: 3px;
+}
+
+/* ---- Screen reader only ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Skip link ---- */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-primary);
+  color: var(--color-white);
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-md);
+  z-index: 9999;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+.skip-link:focus { top: 12px; }
+
+/* ---- App shell ---- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--bg-forest-mid) 0%, var(--bg-forest-deep) 50%, var(--bg-forest-mid) 100%);
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- High contrast ---- */
+@media (prefers-contrast: high) {
+  :root { --color-primary: #0369a1; }
 }

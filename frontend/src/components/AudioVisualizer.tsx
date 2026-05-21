@@ -12,27 +12,75 @@ export default function AudioVisualizer() {
   const agentTrackRef = useMemo(() => {
     return agentParticipant && agentMicPublication
       ? {
-          participant: agentParticipant,
-          publication: agentMicPublication,
-          source: Track.Source.Microphone,
-        }
+        participant: agentParticipant,
+        publication: agentMicPublication,
+        source: Track.Source.Microphone,
+      }
       : undefined;
   }, [agentParticipant, agentMicPublication]);
 
   return (
-    <div className="flex h-full w-full items-center justify-center px-4">
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        height: "100%",
+        padding: "0 1.5rem",
+      }}
+    >
       {agentTrackRef ? (
         <BarVisualizer
           state="listening"
-          barCount={18}
-          options={{ minHeight: 12 }}
+          barCount={22}
+          options={{ minHeight: 8 }}
           trackRef={agentTrackRef}
-          className="h-full max-h-20 w-full text-cyan-300"
+          style={{ width: "100%", maxHeight: "140px", color: "var(--color-primary)" }}
         />
       ) : (
-        <div className="flex items-center gap-3 text-sm font-bold uppercase text-neutral-500">
-          <span className="h-3 w-3 rounded-full bg-neutral-600" />
-          Waiting for assistant
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            color: "rgba(255,255,255,0.2)",
+          }}
+        >
+          {/* Idle waveform animation */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                style={{
+                  width: 5,
+                  height: 20,
+                  borderRadius: 3,
+                  background: "rgba(14,165,233,0.25)",
+                  animation: `idleBar 1.8s ease-in-out ${i * 0.15}s infinite`,
+                }}
+              />
+            ))}
+          </div>
+          <span
+            style={{
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,0.25)",
+            }}
+          >
+            Đang chờ trợ lý...
+          </span>
+
+          <style>{`
+            @keyframes idleBar {
+              0%,100% { height: 8px; opacity: 0.3; }
+              50%      { height: 24px; opacity: 0.6; }
+            }
+          `}</style>
         </div>
       )}
     </div>
