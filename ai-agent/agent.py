@@ -402,6 +402,17 @@ async def entrypoint(ctx: agents.JobContext):
                 if payload.get("type") == "location_update":
                     assistant.latest_coords = payload.get("data")
                     logger.info(f"✅ Received GPS coordinates: {assistant.latest_coords}")
+                    return
+
+                if payload.get("type") == "sos_trigger":
+                    if payload.get("data"):
+                        assistant.latest_coords = payload.get("data")
+                    logger.info("🚨 SOS trigger received from frontend.")
+                    asyncio.create_task(asyncio.to_thread(
+                        send_emergency_sos,
+                        precise_coords=assistant.latest_coords,
+                    ))
+                    return
             except Exception as e:
                 logger.error(f"Error parsing frontend data: {e}")
 
