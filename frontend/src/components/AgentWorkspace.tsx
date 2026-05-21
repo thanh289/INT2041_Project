@@ -23,6 +23,7 @@ import type { LucideIcon } from "lucide-react";
 import { Track } from "livekit-client";
 import { motion, AnimatePresence } from "framer-motion";
 import AudioVisualizer from "./AudioVisualizer";
+import { useAgentEvents } from "../hooks/useAgentEvents";
 
 type TabId = "home" | "chat" | "files" | "emergency";
 
@@ -39,11 +40,10 @@ function TactileHeader() {
       aria-label="Status Bar"
     >
       <h2
-        className={`text-4xl md:text-6xl font-black tracking-widest uppercase transition-colors duration-500 text-center ${
-          agentParticipant
+        className={`text-4xl md:text-6xl font-black tracking-widest uppercase transition-colors duration-500 text-center ${agentParticipant
             ? "text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.5)]"
             : "text-cyan-400 drop-shadow-[0_0_20px_rgba(34,211,238,0.5)]"
-        }`}
+          }`}
         aria-live="polite"
       >
         {agentParticipant ? "AGENT CONNECTED" : "WAITING FOR AGENT..."}
@@ -81,11 +81,10 @@ function TabNavigation({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             aria-label={`Tab: ${tab.label}`}
-            className={`relative flex-1 min-w-[200px] h-24 md:h-32 flex flex-col items-center justify-center gap-2 rounded-[1.5rem] border-[4px] transition-all duration-300 group ${
-              isActive
+            className={`relative flex-1 min-w-[200px] h-24 md:h-32 flex flex-col items-center justify-center gap-2 rounded-[1.5rem] border-[4px] transition-all duration-300 group ${isActive
                 ? "bg-yellow-400 border-yellow-500 text-black shadow-[0_0_30px_rgba(250,204,21,0.4)]"
                 : "bg-[#111] border-gray-700 text-white hover:bg-[#222] hover:border-gray-500 hover:scale-[1.02]"
-            }`}
+              }`}
           >
             <Icon
               className={`h-10 w-10 md:h-12 md:w-12 transition-transform ${isActive ? "scale-110" : "group-hover:scale-110"}`}
@@ -117,19 +116,18 @@ function HomeTab() {
   const trackRef =
     localParticipant && cameraPublication
       ? {
-          participant: localParticipant,
-          source: Track.Source.Camera,
-          publication: cameraPublication,
-        }
+        participant: localParticipant,
+        source: Track.Source.Camera,
+        publication: cameraPublication,
+      }
       : null;
 
   return (
     <div className="flex-1 w-full h-full p-6 flex flex-col items-center justify-center relative overflow-hidden">
       {/* Massive Audio Visualizer Base */}
       <div
-        className={`absolute inset-0 z-0 transition-opacity duration-500 flex items-center justify-center ${
-          isCameraEnabled ? "opacity-30 scale-90" : "opacity-100 scale-100"
-        }`}
+        className={`absolute inset-0 z-0 transition-opacity duration-500 flex items-center justify-center ${isCameraEnabled ? "opacity-30 scale-90" : "opacity-100 scale-100"
+          }`}
       >
         <AudioVisualizer />
       </div>
@@ -319,7 +317,7 @@ function EmergencyTab() {
     const beep = new Audio(
       "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU...",
     );
-    beep.play().catch(() => {});
+    beep.play().catch(() => { });
 
     if (!localParticipant) {
       alert("Cannot send SOS: not connected to the assistant yet.");
@@ -401,11 +399,10 @@ function TactileFooter() {
     >
       <button
         onClick={toggleMic}
-        className={`flex min-h-[120px] flex-1 max-w-[400px] items-center justify-center gap-6 rounded-[2rem] border-[6px] transition-all duration-300 ${
-          isMicrophoneEnabled
+        className={`flex min-h-[120px] flex-1 max-w-[400px] items-center justify-center gap-6 rounded-[2rem] border-[6px] transition-all duration-300 ${isMicrophoneEnabled
             ? "border-yellow-400 bg-yellow-400 text-black shadow-[0_0_50px_rgba(250,204,21,0.5)] border-b-[12px] border-b-yellow-600 hover:bg-yellow-300"
             : "border-gray-600 bg-[#1a0505] text-red-500 border-b-[12px] border-b-gray-800 hover:bg-[#2a0808]"
-        } hover:scale-[1.04] active:scale-95`}
+          } hover:scale-[1.04] active:scale-95`}
         aria-label={
           isMicrophoneEnabled
             ? "Microphone ON. Tap to mute."
@@ -424,11 +421,10 @@ function TactileFooter() {
 
       <button
         onClick={toggleCamera}
-        className={`flex min-h-[120px] flex-1 max-w-[400px] items-center justify-center gap-6 rounded-[2rem] border-[6px] transition-all duration-300 ${
-          isCameraEnabled
+        className={`flex min-h-[120px] flex-1 max-w-[400px] items-center justify-center gap-6 rounded-[2rem] border-[6px] transition-all duration-300 ${isCameraEnabled
             ? "border-cyan-400 bg-cyan-400 text-black shadow-[0_0_50px_rgba(34,211,238,0.5)] border-b-[12px] border-b-cyan-600 hover:bg-cyan-300"
             : "border-gray-600 bg-[#05101a] text-cyan-500 border-b-[12px] border-b-gray-800 hover:bg-[#081a2a]"
-        } hover:scale-[1.04] active:scale-95`}
+          } hover:scale-[1.04] active:scale-95`}
         aria-label={
           isCameraEnabled
             ? "Camera ON. Tap to turn off."
@@ -451,7 +447,13 @@ function TactileFooter() {
 // --- MAIN WORKSPACE ---
 export default function AgentWorkspace() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
-
+  useAgentEvents({
+    onModeChange: (mode) => {
+      if (mode === "chat") setActiveTab("chat");
+      else if (mode === "files") setActiveTab("files");
+      else if (mode === "object_detection") setActiveTab("home");
+    },
+  });
   return (
     <div className="flex flex-col h-full w-full bg-black relative">
       <div id="a11y-announcer" aria-live="assertive" className="sr-only" />
