@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useRef } from "react";
+import { FormEvent, useMemo, useState, useRef, useEffect } from "react";
 import {
   useLocalParticipant,
   useVoiceAssistant,
@@ -39,7 +39,7 @@ function StatusHeader() {
     <header
       className="w-full shrink-0 z-20"
       role="region"
-      aria-label="Trạng thái kết nối"
+      aria-label="Connection Status"
       style={{
         background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
         borderBottom: "3px solid rgba(9,141,113,0.4)",
@@ -100,7 +100,7 @@ function StatusHeader() {
           flexShrink: 0,
           ...(isConnected ? { animation: "pulse-dot 2s ease-in-out infinite" } : {}),
         }} />
-        {isConnected ? "Đã kết nối" : "Đang chờ..."}
+        {isConnected ? "Connected" : "Waiting..."}
       </div>
 
       <style>{`
@@ -133,12 +133,12 @@ function ControlBar() {
       zIndex: 20,
     }}
       role="region"
-      aria-label="Điều khiển mic và camera"
+      aria-label="Mic and camera controls"
     >
       {/* Mic button */}
       <button
         onClick={toggleMic}
-        aria-label={isMicrophoneEnabled ? "Microphone đang bật. Nhấn để tắt." : "Microphone đang tắt. Nhấn để bật."}
+        aria-label={isMicrophoneEnabled ? "Microphone is ON. Tap to turn OFF." : "Microphone is OFF. Tap to turn ON."}
         style={{
           flex: 1,
           minHeight: 72,
@@ -162,14 +162,14 @@ function ControlBar() {
           ? <Mic size={28} aria-hidden="true" />
           : <MicOff size={28} aria-hidden="true" />}
         <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-          {isMicrophoneEnabled ? "Mic bật" : "Mic tắt"}
+          {isMicrophoneEnabled ? "Mic On" : "Mic Off"}
         </span>
       </button>
 
       {/* Camera button */}
       <button
         onClick={toggleCam}
-        aria-label={isCameraEnabled ? "Camera đang bật. Nhấn để tắt." : "Camera đang tắt. Nhấn để bật."}
+        aria-label={isCameraEnabled ? "Camera is ON. Tap to turn OFF." : "Camera is OFF. Tap to turn ON."}
         style={{
           flex: 1,
           minHeight: 72,
@@ -193,7 +193,7 @@ function ControlBar() {
           ? <Camera size={28} aria-hidden="true" />
           : <CameraOff size={28} aria-hidden="true" />}
         <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-          {isCameraEnabled ? "Camera bật" : "Camera tắt"}
+          {isCameraEnabled ? "Camera On" : "Camera Off"}
         </span>
       </button>
     </div>
@@ -219,7 +219,7 @@ function BottomNav({
 
   return (
     <nav
-      aria-label="Điều hướng chính"
+      aria-label="Main navigation"
       style={{
         position: "relative",
         zIndex: 30,
@@ -319,74 +319,226 @@ function BottomNav({
 // ─────────────────────────────────────────
 // HOME TAB
 // ─────────────────────────────────────────
-function HomeTab() {
+function HomeTab({ sentMessages }: { sentMessages: string[] }) {
   const { localParticipant, isCameraEnabled } = useLocalParticipant();
+  const { agentTranscriptions } = useVoiceAssistant();
   const cameraPublication = localParticipant?.getTrackPublication(Track.Source.Camera);
   const trackRef = localParticipant && cameraPublication
     ? { participant: localParticipant, source: Track.Source.Camera, publication: cameraPublication }
     : null;
 
-  return (
-    <div style={{
-      flex: 1, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      padding: "1rem", gap: "1rem", overflow: "hidden",
-      position: "relative",
-    }}>
-      {/* Audio visualizer background */}
-      <div style={{
-        position: "absolute", inset: 0,
-        opacity: isCameraEnabled ? 0.2 : 0.85,
-        transition: "opacity 0.5s ease",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <AudioVisualizer />
-      </div>
+  const agentLines = useMemo(
+    () => agentTranscriptions.map((s) => s.text).filter(Boolean),
+    [agentTranscriptions]
+  );
 
-      {/* Camera / placeholder card */}
-      <div style={{
-        position: "relative", zIndex: 10,
-        width: "100%", maxWidth: 720,
-        borderRadius: 24,
-        overflow: "hidden",
-        border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.1)"}`,
-        boxShadow: isCameraEnabled ? "0 0 40px rgba(9,141,113,0.35)" : "none",
-        background: "#0a1a14",
-        aspectRatio: "16/9",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        {isCameraEnabled && trackRef ? (
-          <>
-            {/* Live badge */}
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [sentMessages, agentLines]);
+
+  return (
+    <div className="home-tab-container">
+      <style>{`
+        .home-tab-container {
+          flex: 1;
+          display: flex;
+          flex-direction: row;
+          padding: 1.5rem;
+          gap: 1.5rem;
+          overflow: hidden;
+          width: 100%;
+          height: 100%;
+        }
+
+        .home-left-col {
+          flex: 1.25;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          border-radius: 24px;
+          overflow: hidden;
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          padding: 1rem;
+        }
+
+        .home-right-col {
+          flex: 0.75;
+          display: flex;
+          flex-direction: column;
+          background: rgba(15, 45, 74, 0.4);
+          backdrop-filter: blur(12px);
+          border: 2px solid rgba(9, 141, 113, 0.25);
+          border-radius: 24px;
+          overflow: hidden;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .mini-chat-header {
+          padding: 1rem;
+          background: rgba(12, 30, 53, 0.8);
+          border-bottom: 2px solid rgba(9, 141, 113, 0.3);
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .mini-chat-title {
+          font-family: 'Atkinson Hyperlegible', sans-serif;
+          font-size: 1rem;
+          font-weight: 700;
+          color: #7dd3fc;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .mini-chat-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .mini-msg-user {
+          align-self: flex-end;
+          max-width: 85%;
+          padding: 0.6rem 0.9rem;
+          border-radius: 14px 14px 2px 14px;
+          background: linear-gradient(135deg, var(--color-primary), #38bdf8);
+          color: #fff;
+          font-size: 0.95rem;
+          line-height: 1.5;
+          box-shadow: 0 4px 10px rgba(9, 141, 113, 0.25);
+        }
+
+        .mini-msg-agent {
+          align-self: flex-start;
+          max-width: 85%;
+          padding: 0.6rem 0.9rem;
+          border-radius: 14px 14px 14px 2px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(9, 141, 113, 0.2);
+          color: #fff;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 1023px) {
+          .home-tab-container {
+            flex-direction: column;
+            overflow-y: auto;
+          }
+          .home-left-col {
+            flex: none;
+            height: auto;
+            aspect-ratio: 16/9;
+          }
+          .home-right-col {
+            flex: none;
+            height: 300px;
+          }
+        }
+      `}</style>
+
+      {/* Left Column: Visualizer and Camera */}
+      <div className="home-left-col">
+        {/* Audio visualizer background */}
+        <div style={{
+          position: "absolute", inset: 0,
+          opacity: isCameraEnabled ? 0.2 : 0.85,
+          transition: "opacity 0.5s ease",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <AudioVisualizer />
+        </div>
+
+        {/* Camera / placeholder card */}
+        <div style={{
+          position: "relative", zIndex: 10,
+          width: "100%",
+          borderRadius: 20,
+          overflow: "hidden",
+          border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.1)"}`,
+          boxShadow: isCameraEnabled ? "0 0 30px rgba(9, 141, 113, 0.3)" : "none",
+          background: "#0a1a14",
+          aspectRatio: "16/9",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {isCameraEnabled && trackRef ? (
+            <>
+              {/* Live badge */}
+              <div style={{
+                position: "absolute", top: 12, left: 12, zIndex: 10,
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "4px 12px", borderRadius: 9999,
+                background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
+                border: "1.5px solid rgba(9,141,113,0.5)",
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7dd3fc", animation: "pulse-dot 2s ease-in-out infinite" }} />
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Vision Active
+                </span>
+              </div>
+              <VideoTrack trackRef={trackRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </>
+          ) : (
             <div style={{
-              position: "absolute", top: 12, left: 12, zIndex: 10,
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "4px 12px", borderRadius: 9999,
-              background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
-              border: "1.5px solid rgba(9,141,113,0.5)",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem",
+              padding: "2rem",
             }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7dd3fc", animation: "pulse-dot 2s ease-in-out infinite" }} />
-              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                Vision Active
+              <CameraOff size={52} color="rgba(255,255,255,0.25)" aria-hidden="true" />
+              <span style={{
+                fontSize: "1rem", fontWeight: 700, color: "rgba(255,255,255,0.35)",
+                letterSpacing: "0.1em", textTransform: "uppercase",
+                fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              }}>
+                Camera is OFF
               </span>
             </div>
-            <VideoTrack trackRef={trackRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          </>
-        ) : (
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem",
-            padding: "2rem",
-          }}>
-            <CameraOff size={64} color="rgba(255,255,255,0.25)" aria-hidden="true" />
-            <span style={{
-              fontSize: "1.1rem", fontWeight: 700, color: "rgba(255,255,255,0.35)",
-              letterSpacing: "0.1em", textTransform: "uppercase",
+          )}
+        </div>
+      </div>
+
+      {/* Right Column: Mini Chatbox */}
+      <div className="home-right-col" role="log" aria-live="polite" aria-label="Quick conversation log">
+        <div className="mini-chat-header">
+          <MessageSquareText size={18} color="#7dd3fc" aria-hidden="true" />
+          <span className="mini-chat-title">Conversation Log</span>
+        </div>
+        <div ref={scrollRef} className="mini-chat-body">
+          {sentMessages.length === 0 && agentLines.length === 0 && (
+            <div style={{
+              margin: "auto", textAlign: "center",
+              color: "rgba(255,255,255,0.25)", fontWeight: 700,
+              fontSize: "0.85rem", letterSpacing: "0.06em", textTransform: "uppercase",
               fontFamily: "'Atkinson Hyperlegible', sans-serif",
             }}>
-              Camera đang tắt
-            </span>
-          </div>
-        )}
+              No messages yet
+            </div>
+          )}
+
+          {sentMessages.map((text, i) => (
+            <div key={`mini-u-${i}`} className="mini-msg-user">
+              {text}
+            </div>
+          ))}
+          {agentLines.map((text, i) => (
+            <div key={`mini-a-${i}`} className="mini-msg-agent">
+              <span style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.15rem", textTransform: "uppercase" }}>
+                Assistant
+              </span>
+              {text}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -395,11 +547,16 @@ function HomeTab() {
 // ─────────────────────────────────────────
 // CHAT TAB
 // ─────────────────────────────────────────
-function ChatTab() {
+function ChatTab({
+  sentMessages,
+  setSentMessages,
+}: {
+  sentMessages: string[];
+  setSentMessages: React.Dispatch<React.SetStateAction<string[]>>;
+}) {
   const { localParticipant } = useLocalParticipant();
   const { agentTranscriptions } = useVoiceAssistant();
   const [message, setMessage] = useState("");
-  const [sentMessages, setSentMessages] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const agentLines = useMemo(
@@ -429,7 +586,7 @@ function ChatTab() {
         ref={scrollRef}
         role="log"
         aria-live="polite"
-        aria-label="Lịch sử trò chuyện"
+        aria-label="Chat history"
         style={{
           flex: 1, overflowY: "auto", display: "flex", flexDirection: "column",
           gap: "0.75rem", padding: "1rem",
@@ -445,7 +602,7 @@ function ChatTab() {
             fontSize: "1rem", letterSpacing: "0.06em", textTransform: "uppercase",
             fontFamily: "'Atkinson Hyperlegible', sans-serif",
           }}>
-            Chưa có tin nhắn
+            No messages yet
           </div>
         )}
 
@@ -477,7 +634,7 @@ function ChatTab() {
               fontSize: "1rem", lineHeight: 1.6,
             }}>
               <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Trợ lý
+                Assistant
               </span>
               {text}
             </div>
@@ -493,8 +650,8 @@ function ChatTab() {
         <input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Nhập tin nhắn..."
-          aria-label="Nhập tin nhắn để chat với AI"
+          placeholder="Type a message..."
+          aria-label="Type a message to chat with AI"
           style={{
             flex: 1, padding: "0.875rem 1.25rem",
             borderRadius: 14,
@@ -511,7 +668,7 @@ function ChatTab() {
         />
         <button
           type="submit"
-          aria-label="Gửi tin nhắn"
+          aria-label="Send message"
           style={{
             padding: "0 1.25rem",
             borderRadius: 14,
@@ -539,19 +696,19 @@ function ChatTab() {
 // ─────────────────────────────────────────
 function FilesTab() {
   const { localParticipant } = useLocalParticipant();
-  const [status, setStatus] = useState("Sẵn sàng nhận file");
+  const [status, setStatus] = useState("Ready to receive file");
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !localParticipant) return;
-    setStatus(`Đang xử lý: ${file.name}...`);
+    setStatus(`Processing: ${file.name}...`);
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        await localParticipant.sendText(`File đã tải lên: ${file.name}. Tóm tắt nội dung giúp tôi.`, { topic: "lk.chat" });
-        setStatus(`Đã gửi: ${file.name}`);
+        await localParticipant.sendText(`File uploaded: ${file.name}. Please summarize the content.`, { topic: "lk.chat" });
+        setStatus(`Sent: ${file.name}`);
       } catch {
-        setStatus("Lỗi khi gửi file đến AI.");
+        setStatus("Error sending file to AI.");
       }
     };
     reader.readAsText(file);
@@ -586,17 +743,17 @@ function FilesTab() {
             fontSize: "1.375rem", fontWeight: 700, color: "#fff",
             letterSpacing: "0.04em", marginBottom: "0.5rem",
           }}>
-            Trợ lý đọc file
+            Assistant File Reader
           </h2>
           <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
-            Tải lên file văn bản để AI đọc và tóm tắt nội dung cho bạn.
+            Upload a text file for the AI to read and summarize the content for you.
           </p>
         </div>
 
         <label
           tabIndex={0}
           role="button"
-          aria-label="Tải file lên để đọc"
+          aria-label="Upload file to read"
           style={{
             width: "100%", minHeight: 140,
             display: "flex", flexDirection: "column",
@@ -645,7 +802,7 @@ function EmergencyTab() {
 
   const triggerSos = async () => {
     if (!localParticipant) {
-      alert("Chưa kết nối với trợ lý.");
+      alert("Not connected to assistant.");
       return;
     }
     let coords: unknown = null;
@@ -659,9 +816,9 @@ function EmergencyTab() {
         new TextEncoder().encode(JSON.stringify(payload)),
         { reliable: true }
       );
-      alert("SOS đã được gửi. Đang thông báo người liên hệ khẩn cấp.");
+      alert("SOS sent. Notifying emergency contacts.");
     } catch {
-      alert("Gửi SOS thất bại. Vui lòng thử lại.");
+      alert("SOS failed. Please try again.");
     }
   };
 
@@ -694,16 +851,16 @@ function EmergencyTab() {
             fontSize: "1.375rem", fontWeight: 700, color: "#fff",
             marginBottom: "0.5rem",
           }}>
-            Khẩn cấp SOS
+            Emergency SOS
           </h2>
           <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
-            Nhấn nút bên dưới để gửi vị trí và thông báo khẩn cấp.
+            Tap the button below to send location and emergency alert.
           </p>
         </div>
 
         <button
           onClick={triggerSos}
-          aria-label="Gửi tín hiệu SOS ngay bây giờ"
+          aria-label="Send SOS signal now"
           style={{
             width: "100%", minHeight: 120,
             borderRadius: 20,
@@ -722,7 +879,7 @@ function EmergencyTab() {
           onMouseDown={(e) => { (e.currentTarget.style.transform = "scale(0.98)"); }}
           onMouseUp={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
         >
-          GỬI SOS
+          SEND SOS
         </button>
       </div>
     </div>
@@ -734,6 +891,7 @@ function EmergencyTab() {
 // ─────────────────────────────────────────
 export default function AgentWorkspace() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
+  const [sentMessages, setSentMessages] = useState<string[]>([]);
 
   useAgentEvents({
     onModeChange: (mode) => {
@@ -760,7 +918,7 @@ export default function AgentWorkspace() {
       {/* Main content area */}
       <main
         style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative" }}
-        aria-label="Nội dung chính"
+        aria-label="Main content"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -771,8 +929,8 @@ export default function AgentWorkspace() {
             transition={{ duration: 0.25, ease: "easeInOut" }}
             style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}
           >
-            {activeTab === "home" && <HomeTab />}
-            {activeTab === "chat" && <ChatTab />}
+            {activeTab === "home" && <HomeTab sentMessages={sentMessages} />}
+            {activeTab === "chat" && <ChatTab sentMessages={sentMessages} setSentMessages={setSentMessages} />}
             {activeTab === "files" && <FilesTab />}
             {activeTab === "emergency" && <EmergencyTab />}
           </motion.div>

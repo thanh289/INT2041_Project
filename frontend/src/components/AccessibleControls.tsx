@@ -41,7 +41,7 @@ export default function AccessibleControls() {
                 {/* CAMERA FEED - Middle Section */}
                 <button
                     onClick={toggleCam}
-                    aria-label={isCameraEnabled ? "Camera đang bật. Trợ lý đang xem được bạn. Nhấn để Tắt." : "Camera đang tắt. Nhấn để Bật ống kính."}
+                    aria-label={isCameraEnabled ? "Camera is ON. Assistant can see you. Tap to turn OFF." : "Camera is OFF. Tap to turn ON."}
                     className={`flex-1 min-h-[30vh] flex items-center justify-center rounded-[2rem] border-4 transition-all duration-500 overflow-hidden relative group focus-within:ring-4 focus-within:ring-yellow-400 ${isCameraEnabled
                         ? "bg-black/60 border-cyan-500/50 shadow-[0_0_30px_rgba(34,211,238,0.1)]"
                         : "bg-white/[0.02] border-white/10 glassmorphism backdrop-blur-md hover:bg-white/[0.05]"
@@ -84,7 +84,7 @@ export default function AccessibleControls() {
                 {/* MAIN MIC BUTTON - Bottom Control Bar */}
                 <button
                     onClick={toggleMic}
-                    aria-label={isMicrophoneEnabled ? "Microphone đang bật. Nhấn để Tắt." : "Microphone đang tắt. Nhấn để Bật."}
+                    aria-label={isMicrophoneEnabled ? "Microphone is ON. Tap to turn OFF." : "Microphone is OFF. Tap to turn ON."}
                     className={`h-[25vh] min-h-[200px] flex items-center justify-center rounded-[3rem] border-4 transition-all duration-500 z-10 focus-within:ring-4 focus-within:ring-yellow-400 ${isMicrophoneEnabled
                         ? "bg-green-500/10 border-green-400 backdrop-blur-xl shadow-[0_0_50px_rgba(74,222,128,0.2),inset_0_0_20px_rgba(74,222,128,0.1)] hover:bg-green-500/20"
                         : "bg-red-500/5 border-red-500/30 backdrop-blur-xl glassmorphism hover:bg-red-500/10 shadow-[0_0_30px_inset_rgba(239,68,68,0.05)]"

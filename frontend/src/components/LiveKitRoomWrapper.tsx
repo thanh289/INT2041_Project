@@ -71,7 +71,7 @@ export default function LiveKitRoomWrapper({
             textTransform: "uppercase",
             animation: "fadeInOut 1.8s ease-in-out infinite",
           }}>
-            Đang khởi động...
+            Initializing...
           </p>
           <p style={{
             fontFamily: "'Atkinson Hyperlegible', sans-serif",
@@ -80,7 +80,7 @@ export default function LiveKitRoomWrapper({
             letterSpacing: "0.05em",
             marginTop: "0.375rem",
           }}>
-            Đang kết nối phiên làm việc
+            Connecting session...
           </p>
         </div>
 

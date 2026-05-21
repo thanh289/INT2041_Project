@@ -3,9 +3,9 @@
 import { useState } from "react";
 import LiveKitRoomWrapper from "@/components/LiveKitRoomWrapper";
 
-// ---- Decorative leaf component ----
-function Leaf({ className }: { className: string }) {
-  return <div className={`leaf ${className}`} aria-hidden="true" />;
+// ---- Decorative Aurora Orbs ----
+function AuroraOrb({ className }: { className: string }) {
+  return <div className={`aurora-orb ${className}`} aria-hidden="true" />;
 }
 
 export default function Home() {
@@ -62,56 +62,77 @@ export default function Home() {
           font-family: 'Atkinson Hyperlegible', sans-serif;
         }
 
-        /* ---- Decorative leaves ---- */
-        .leaf {
+        /* ---- Decorative Aurora Orbs ---- */
+        .aurora-orb {
           position: absolute;
-          background: linear-gradient(135deg,
-            rgba(76,145,100,0.7) 0%,
-            rgba(60,120,80,0.8) 40%,
-            rgba(45,95,65,0.9) 70%,
-            rgba(35,75,50,0.95) 100%
-          );
-          border-radius: 50% 0;
+          border-radius: 50%;
+          filter: blur(80px);
+          opacity: 0.5;
           pointer-events: none;
-          box-shadow:
-            8px 8px 20px rgba(0,0,0,0.4),
-            -2px -2px 10px rgba(255,255,255,0.1),
-            inset 5px 5px 15px rgba(100,160,120,0.3),
-            inset -5px -5px 15px rgba(20,40,30,0.4);
+          animation: floatOrb 12s ease-in-out infinite alternate;
         }
-        .leaf::before {
-          content: '';
-          position: absolute;
-          width: 2px; height: 90%;
-          background: linear-gradient(to bottom, rgba(80,130,90,0.8), rgba(50,90,60,0.9));
-          left: 45%; top: 10%;
-          transform: translateX(-50%) rotate(-147deg);
-          border-radius: 2px;
+        
+        .orb-1 {
+          width: 50vw; height: 50vw;
+          max-width: 600px; max-height: 600px;
+          background: radial-gradient(circle, rgba(14,165,233,0.3) 0%, transparent 70%);
+          top: -10%; left: -10%;
+          animation-duration: 14s;
         }
-        .leaf::after {
-          content: '';
+        .orb-2 {
+          width: 40vw; height: 40vw;
+          max-width: 500px; max-height: 500px;
+          background: radial-gradient(circle, rgba(9,141,113,0.3) 0%, transparent 70%);
+          bottom: -10%; right: -5%;
+          animation-duration: 18s;
+          animation-delay: -4s;
+        }
+        .orb-3 {
+          width: 35vw; height: 35vw;
+          max-width: 400px; max-height: 400px;
+          background: radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%);
+          top: 30%; left: 40%;
+          animation-duration: 20s;
+          animation-delay: -8s;
+        }
+
+        @keyframes floatOrb {
+          0%   { transform: translate(0, 0) scale(1); }
+          50%  { transform: translate(5%, 8%) scale(1.1); }
+          100% { transform: translate(-5%, -5%) scale(0.95); }
+        }
+
+        /* ---- Grid Overlay ---- */
+        .grid-overlay {
           position: absolute;
           inset: 0;
-          border-radius: 50% 0;
-          background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+          background-image: 
+            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+          background-size: 40px 40px;
+          pointer-events: none;
+          z-index: 1;
         }
-        .leaf-1 { width:180px;height:280px; top:5%;  left:-5%;  transform:rotate(-20deg); opacity:0.85; animation:leafFloat1 6s ease-in-out infinite; }
-        .leaf-2 { width:150px;height:230px; top:15%; left:8%;   transform:rotate(10deg);  opacity:0.75; animation:leafFloat2 7s ease-in-out infinite; }
-        .leaf-3 { width:200px;height:300px; top:40%; left:-8%;  transform:rotate(-30deg); opacity:0.9;  animation:leafFloat1 8s ease-in-out infinite; }
-        .leaf-4 { width:120px;height:180px; bottom:10%;left:5%; transform:rotate(15deg);  opacity:0.7;  animation:leafFloat2 5s ease-in-out infinite; }
-        .leaf-5 { width:160px;height:240px; top:10%; right:5%;  transform:rotate(25deg) scaleX(-1);  opacity:0.8;  animation:leafFloat1 7s ease-in-out infinite; }
-        .leaf-6 { width:190px;height:280px; top:35%; right:-5%; transform:rotate(-15deg) scaleX(-1); opacity:0.85; animation:leafFloat2 6s ease-in-out infinite; }
-        .leaf-7 { width:140px;height:210px; bottom:15%;right:8%;transform:rotate(20deg) scaleX(-1);  opacity:0.75; animation:leafFloat1 5.5s ease-in-out infinite; }
-        .leaf-8 { width:110px;height:170px; bottom:-5%;right:-3%;transform:rotate(-25deg) scaleX(-1);opacity:0.7;  animation:leafFloat2 6.5s ease-in-out infinite; }
 
-        @keyframes leafFloat1 {
-          0%,100% { transform: rotate(-20deg) translateY(0); }
-          50%      { transform: rotate(-20deg) translateY(-8px); }
+        /* ---- Sonar Sweep ---- */
+        .sonar-sweep {
+          position: absolute;
+          top: 50%; left: 50%;
+          width: 200vmax; height: 200vmax;
+          background: conic-gradient(from 0deg, transparent 75%, rgba(14,165,233,0.15) 100%);
+          transform-origin: center;
+          animation: sweep 10s linear infinite;
+          pointer-events: none;
+          z-index: 2;
+          border-radius: 50%;
+          margin-top: -100vmax; margin-left: -100vmax;
         }
-        @keyframes leafFloat2 {
-          0%,100% { transform: rotate(10deg) translateY(0); }
-          50%      { transform: rotate(10deg) translateY(6px); }
+        @keyframes sweep {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
+
+
 
         /* ---- Logo bar ---- */
         .home-logo-bar {
@@ -139,10 +160,42 @@ export default function Home() {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          padding: 2rem 2rem 1rem;
+          padding: 2rem 1.5rem 1rem;
           text-align: center;
-          max-width: 820px;
+          max-width: 860px;
           width: 100%;
+        }
+
+        /* ---- Glass Card for Hero ---- */
+        .hero-glass-card {
+          background: rgba(12, 30, 53, 0.4);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 2.5rem;
+          padding: 3.5rem 2.5rem;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+          overflow: hidden;
+        }
+        .hero-glass-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: -100%;
+          width: 50%; height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+          transform: skewX(-20deg);
+          animation: shine 7s infinite;
+        }
+        @keyframes shine {
+          0% { left: -100%; }
+          20% { left: 200%; }
+          100% { left: 200%; }
         }
 
         .home-title {
@@ -273,14 +326,21 @@ export default function Home() {
         }
 
         @media (max-width: 640px) {
-          .leaf { display: none; }
-          .home-hero { padding: 1.5rem 1rem; }
+          .home-hero { padding: 1rem; }
+          .hero-glass-card { padding: 2rem 1.25rem; border-radius: 1.5rem; }
+          .home-title { font-size: 2.25rem; }
         }
       `}</style>
 
       <div className="home-page" role="main">
-        {/* Leaves */}
-        {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <Leaf key={n} className={`leaf-${n}`} />)}
+        {/* Background Effects */}
+        <div className="grid-overlay" />
+        <div className="sonar-sweep" />
+        
+        {/* Glowing Orbs */}
+        <AuroraOrb className="orb-1" />
+        <AuroraOrb className="orb-2" />
+        <AuroraOrb className="orb-3" />
 
         {/* Logo bar */}
         <div className="home-logo-bar">
@@ -289,23 +349,24 @@ export default function Home() {
 
         {/* Hero */}
         <section className="home-hero">
-          <h1 className="home-title">
-            Illuminating Your<br />World with AI
-          </h1>
-          <p className="home-desc">
-            AI-powered voice &amp; vision assistance —<br />
-            object detection, navigation, chat support,<br />
-            and more, designed for everyone.
-          </p>
+          <div className="hero-glass-card">
+            <h1 className="home-title">
+              Navigate Your World<br />With Confidence
+            </h1>
+            <p className="home-desc">
+              Empowering everyday independence with real-time AI audio-vision assistance.<br />
+              Explore your surroundings, read documents, and connect with ease.
+            </p>
 
-          <button
-            onClick={handleStartConnection}
-            className="start-btn"
-            aria-label="Tap to connect and start the voice assistant"
-          >
-            <span className="start-btn-label">Start</span>
-            <span className="start-btn-sub">Tap anywhere to connect</span>
-          </button>
+            <button
+              onClick={handleStartConnection}
+              className="start-btn"
+              aria-label="Tap to connect and start the voice assistant"
+            >
+              <span className="start-btn-label">Start</span>
+              <span className="start-btn-sub">Tap anywhere to connect</span>
+            </button>
+          </div>
         </section>
 
         {/* Volume hint */}

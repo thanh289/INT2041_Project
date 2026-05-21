@@ -72,7 +72,7 @@ export default function AudioVisualizer() {
               color: "rgba(255,255,255,0.25)",
             }}
           >
-            Đang chờ trợ lý...
+            Waiting for assistant...
           </span>
 
           <style>{`

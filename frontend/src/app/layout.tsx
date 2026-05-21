@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
 
 export const metadata: Metadata = {
-  title: "Trợ Lý Ảo Người Khiếm Thị",
-  description: "Trợ lý AI bằng giọng nói và thị giác dành cho người khiếm thị kết nối qua LiveKit",
+  title: "AI Vision Assistant",
+  description: "AI-powered voice and vision assistant for the visually impaired connected via LiveKit",
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="en">
       <body className={`${inter.className} bg-black`}>{children}</body>
     </html>
   );
