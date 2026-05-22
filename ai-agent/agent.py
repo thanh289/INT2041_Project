@@ -426,12 +426,22 @@ async def entrypoint(ctx: agents.JobContext):
     
     assistant = Assistant()
     
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
-    if not openai_api_key:
-        logger.error("OPENAI_API_KEY is not set in environment variables.")
+    deepseek_api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not deepseek_api_key:
+        logger.error("DEEPSEEK_API_KEY is not set in environment variables.")
         return
 
-    voice_model = "gpt-4o-mini"
+    voice_model = (
+        os.environ.get("DEEPSEEK_VOICE_MODEL")
+        or os.environ.get("DEEPSEEK_MODEL")
+        or "deepseek-chat"
+    )
+    lowered_voice_model = voice_model.lower()
+    if "reasoner" in lowered_voice_model or lowered_voice_model.startswith("deepseek-v4"):
+        logger.warning(
+            f"Model '{voice_model}' can trigger thinking-mode incompatibilities; switching voice model to 'deepseek-chat'."
+        )
+        voice_model = "deepseek-chat"
 
     session = AgentSession(
         stt=azure.STT(
@@ -439,7 +449,8 @@ async def entrypoint(ctx: agents.JobContext):
             speech_region=os.environ.get("AZURE_SPEECH_REGION"),
         ),
         llm=openai.LLM(
-            api_key=openai_api_key,
+            base_url="https://api.deepseek.com",
+            api_key=deepseek_api_key,
             model=voice_model,
         ),
         tts=azure.TTS(
