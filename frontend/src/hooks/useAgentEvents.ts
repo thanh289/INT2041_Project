@@ -1,15 +1,15 @@
 import { useEffect } from "react";
-import { ConnectionState } from "livekit-client"; 
+import { ConnectionState } from "livekit-client";
 import { useLocalParticipant, useRoomContext } from "@livekit/components-react";
 
-export type AgentMode = "object_detection" | "chat" | "files";
+export type AgentMode = "object_detection" | "chat" | "files" | "emergency";
 
 type UseAgentEventsOptions = {
   onModeChange?: (mode: AgentMode) => void;
 };
 
 function isAgentMode(value: unknown): value is AgentMode {
-  return value === "object_detection" || value === "chat" || value === "files";
+  return value === "object_detection" || value === "chat" || value === "files" || value === "emergency";
 }
 
 export function useAgentEvents({ onModeChange }: UseAgentEventsOptions = {}) {
@@ -61,7 +61,7 @@ export function useAgentEvents({ onModeChange }: UseAgentEventsOptions = {}) {
         cancelled = true;
       };
     }
-  }, [localParticipant, room.state, room]); 
+  }, [localParticipant, room.state, room]);
   // ----------------------------------------------------
 
   useEffect(() => {

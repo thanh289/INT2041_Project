@@ -899,6 +899,7 @@ export default function AgentWorkspace() {
       if (mode === "chat") setActiveTab("chat");
       else if (mode === "files") setActiveTab("files");
       else if (mode === "object_detection") setActiveTab("home");
+      else if (mode === "emergency") setActiveTab("emergency");
     },
   });
 

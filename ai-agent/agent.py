@@ -44,6 +44,7 @@ class Assistant(Agent):
                     - "object detection", "detect objects", "camera mode", "what do you see": mode "object_detection".
                     - "chat", "chatbox", "ask question", "assistant": mode "chat".
                     - "read files", "file reader", "summarize file", "read my pdf": mode "files".
+                    - "sos", "sos tab", "emergency", "emergency tab": mode "emergency".
 
                 - **File Tool:** If the user asks to read, summarize, or get info from a pdf file 
                 (e.g., "summarize my report", "read the first PDF"), 
@@ -88,11 +89,11 @@ class Assistant(Agent):
     async def set_frontend_mode(
         self,
         ctx: RunContext,
-        mode: Literal["object_detection", "chat", "files"],
+        mode: Literal["object_detection", "chat", "files", "emergency"],
     ) -> str:
         """
         Sends a command to the user's frontend to switch between focused pages.
-        Use this when the user asks for object detection, chat/chatbox, or read files.
+        Use this when the user asks for object detection, chat/chatbox, read files, or emergency/SOS.
         """
         logger.info(f"Sending 'set_frontend_mode' command: {mode}")
 

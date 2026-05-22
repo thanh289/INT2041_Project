@@ -48,7 +48,7 @@ export default function Home() {
         <AuroraOrb className="orb-1" />
         <AuroraOrb className="orb-2" />
         <AuroraOrb className="orb-3" />
-        
+
         {/* Workspace Content */}
         <div className="relative z-10 w-full h-full flex flex-col">
           <LiveKitRoomWrapper roomName={roomName} username={username} />
@@ -63,7 +63,7 @@ export default function Home() {
         {/* Background Effects */}
         <div className="grid-overlay" />
         <div className="sonar-sweep" />
-        
+
         {/* Glowing Orbs */}
         <AuroraOrb className="orb-1" />
         <AuroraOrb className="orb-2" />
@@ -81,7 +81,7 @@ export default function Home() {
               Navigate Your World<br />With Confidence
             </h1>
             <p className="home-desc">
-              Empowering everyday independence with real-time AI audio-vision assistance.<br />
+              Empowering everyday independence with real-time AI assistance.<br />
               Explore your surroundings, read documents, and connect with ease.
             </p>
 
@@ -91,18 +91,10 @@ export default function Home() {
               aria-label="Tap to connect and start the voice assistant"
             >
               <span className="start-btn-label">Start</span>
-              <span className="start-btn-sub">Tap anywhere to connect</span>
             </button>
           </div>
         </section>
 
-        {/* Volume hint */}
-        <div className="volume-hint" role="note" aria-live="polite">
-          <p>
-            Screen reader optimized &mdash; please set your device volume to{" "}
-            <strong>80% or higher</strong>
-          </p>
-        </div>
 
         {/* Wave deco */}
         <div className="wave-deco" aria-hidden="true" />
