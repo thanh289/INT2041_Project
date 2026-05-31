@@ -91,7 +91,8 @@ def route_request(user_input: str, context: List[Dict]) -> RequestType:
 
         Classify into exactly one request_type:
         - "read raw text": user wants to view a file's raw content, NOT a summary.
-        - "read file and summary": user wants to summarize, understand, or extract info from a file.
+        - "read file and summary": user wants to summarize a file.
+        - "read file and answer": user wants a specific detail or excerpt from a file.
         - "unsupported": anything NOT about reading or summarizing a file.
 
         Also extract:
@@ -133,6 +134,30 @@ def handle_summarization(text: str, max_words: int = 50) -> Summarize:
     )
 
     return Summarize(raw_text=text, summary=summary_text)
+
+
+def handle_file_question(user_input: str, route_result: RequestType) -> str:
+    """Answer a user question using only the file content."""
+    logger.info("Handling file question via DeepSeek...")
+    file_content = handle_read_file_or_summary(route_result, intent_summary=False)
+
+    if not file_content.content:
+        return "I could not read any text from the file."
+
+    answer = _deepseek_generate(
+        system_prompt=(
+            "You answer questions using only the provided file content. "
+            "If the answer is not present, say: 'I could not find that in the file.' "
+            "Keep the answer short and exact."
+        ),
+        user_prompt=(
+            f"File content:\n{file_content.content}\n\n"
+            f"Question: {user_input}\n"
+            "Answer:"
+        ),
+    )
+
+    return answer.strip()
 
 
 def handle_read_file_or_summary(route_result: RequestType, max_words: int = 50, intent_summary: bool = False) -> FileContent:
@@ -248,6 +273,16 @@ def process_user_input(user_input: str, context: List[Dict]) -> AgentResponse:
             message="File read and summarized successfully.",
             summary=result.summary,
             intent="read file and summary"
+        )
+
+    if route_result.request_type == "read file and answer" and route_result.confidence_score >= 0.7:
+        print("Processing read file and answer request...")
+        answer = handle_file_question(user_input, route_result)
+        return AgentResponse(
+            status="done",
+            message="File read and question answered successfully.",
+            answer=answer,
+            intent="read file and answer"
         )
 
     return AgentResponse(

@@ -9,7 +9,7 @@ class RequestType(BaseModel):
     
     # remove "describe image" and "normal chat" since they will be handled in agent.py
     # not through process_user_input() in function.py
-    request_type: Literal["read file and summary", "read raw text", "unsupported"] = Field(
+    request_type: Literal["read file and summary", "read raw text", "read file and answer", "unsupported"] = Field(
         description="Type of request being made"
     )
     confidence_score: float = Field(description="Confidence score between 0 and 1")
@@ -57,6 +57,10 @@ class AgentResponse(BaseModel):
         default=None,
         description="Summary text if summarization was performed"
     )
-    intent: Literal["read raw text", "read file and summary", "unsupported"] = Field(
+    answer: Optional[str] = Field(
+        default=None,
+        description="Answer extracted from file content if question answering was performed"
+    )
+    intent: Literal["read raw text", "read file and summary", "read file and answer", "unsupported"] = Field(
         description="The intent understood by the agent"
     )

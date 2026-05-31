@@ -536,6 +536,12 @@ function ChatTab({ unifiedMessages, send }: { unifiedMessages: UnifiedMessage[];
   const [message, setMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [unifiedMessages]);
+
   const sendMessage = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const text = message.trim();

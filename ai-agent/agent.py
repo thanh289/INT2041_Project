@@ -143,6 +143,9 @@ class Assistant(Agent):
             elif result.intent == "read file and summary":
                 print(result.summary.summary)
                 return f"Summary of the file you requested: {result.summary.summary}"
+            elif result.intent == "read file and answer":
+                print(result.answer)
+                return f"Answer from the file: {result.answer}"
             else:
                 # return "Sorry, I could not understand your request."
                 print(result.message)
