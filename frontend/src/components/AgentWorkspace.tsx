@@ -42,7 +42,7 @@ function StatusHeader() {
       aria-label="Connection Status"
       style={{
         background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
-        borderBottom: "3px solid rgba(9,141,113,0.4)",
+        borderBottom: "3px solid rgba(56, 189, 248, 0.4)", // Đổi sang viền xanh cyan sáng
         padding: "1rem 1.5rem",
         display: "flex",
         alignItems: "center",
@@ -55,9 +55,9 @@ function StatusHeader() {
         <div style={{
           width: 40, height: 40,
           borderRadius: "50%",
-          background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+          background: "linear-gradient(135deg, #0ea5e9, #38bdf8)", // Đồng nhất màu nút Start
           display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 4px 12px rgba(9,141,113,0.5)",
+          boxShadow: "0 4px 12px rgba(14,165,233,0.5)",
           flexShrink: 0,
         }}>
           <Eye size={22} color="#fff" aria-hidden="true" />
@@ -83,8 +83,8 @@ function StatusHeader() {
           gap: "0.5rem",
           padding: "0.45rem 1rem",
           borderRadius: 9999,
-          background: isConnected ? "rgba(9,141,113,0.2)" : "rgba(255,255,255,0.08)",
-          border: `2px solid ${isConnected ? "var(--color-primary)" : "rgba(255,255,255,0.2)"}`,
+          background: isConnected ? "rgba(14,165,233,0.2)" : "rgba(255,255,255,0.08)",
+          border: `2px solid ${isConnected ? "#38bdf8" : "rgba(255,255,255,0.2)"}`,
           fontSize: "0.9rem",
           fontWeight: 700,
           color: isConnected ? "#7dd3fc" : "rgba(255,255,255,0.6)",
@@ -127,8 +127,8 @@ function ControlBar() {
       display: "flex",
       gap: "0.75rem",
       padding: "0.875rem 1rem",
-      background: "rgba(30,61,51,0.95)",
-      borderTop: "2px solid rgba(9,141,113,0.3)",
+      background: "rgba(15, 45, 74, 0.95)", // Đổi từ xanh lá sẫm sang xanh dương sẫm của hệ thống
+      borderTop: "2px solid rgba(56, 189, 248, 0.3)", // Đổi viền sang màu xanh cyan sáng
       flexShrink: 0,
       zIndex: 20,
     }}
@@ -147,15 +147,15 @@ function ControlBar() {
           justifyContent: "center",
           gap: "0.75rem",
           borderRadius: 16,
-          border: `3px solid ${isMicrophoneEnabled ? "var(--color-primary)" : "rgba(239,68,68,0.5)"}`,
+          border: isMicrophoneEnabled ? "3px solid #ffffff" : "3px solid rgba(239,68,68,0.5)",
           background: isMicrophoneEnabled
-            ? "linear-gradient(135deg, rgba(9,141,113,0.25), rgba(9,141,113,0.12))"
+            ? "linear-gradient(135deg, #0ea5e9, #38bdf8)" // Đổi sang màu gradient Start của Landing Page
             : "rgba(239,68,68,0.08)",
-          color: isMicrophoneEnabled ? "#7dd3fc" : "#f87171",
+          color: isMicrophoneEnabled ? "#ffffff" : "#f87171", // Khi ON thì chữ màu trắng
           cursor: "pointer",
           transition: "all 0.2s ease",
           fontFamily: "'Atkinson Hyperlegible', sans-serif",
-          boxShadow: isMicrophoneEnabled ? "0 4px 16px rgba(9,141,113,0.3)" : "none",
+          boxShadow: isMicrophoneEnabled ? "0 4px 16px rgba(14,165,233,0.4)" : "none",
         }}
       >
         {isMicrophoneEnabled
@@ -178,15 +178,15 @@ function ControlBar() {
           justifyContent: "center",
           gap: "0.75rem",
           borderRadius: 16,
-          border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.15)"}`,
+          border: isCameraEnabled ? "3px solid #ffffff" : "3px solid rgba(239,68,68,0.5)", // Đồng bộ viền đỏ khi OFF
           background: isCameraEnabled
-            ? "linear-gradient(135deg, rgba(9,141,113,0.25), rgba(9,141,113,0.12))"
-            : "rgba(255,255,255,0.04)",
-          color: isCameraEnabled ? "#34d399" : "rgba(255,255,255,0.45)",
+            ? "linear-gradient(135deg, #0ea5e9, #38bdf8)" // Đổi sang màu gradient Start của Landing Page
+            : "rgba(239,68,68,0.08)", // Đồng bộ nền đỏ nhạt khi OFF
+          color: isCameraEnabled ? "#ffffff" : "#f87171", // Khi ON chữ trắng, khi OFF chữ đỏ đồng bộ
           cursor: "pointer",
           transition: "all 0.2s ease",
           fontFamily: "'Atkinson Hyperlegible', sans-serif",
-          boxShadow: isCameraEnabled ? "0 4px 16px rgba(9,141,113,0.3)" : "none",
+          boxShadow: isCameraEnabled ? "0 4px 16px rgba(14,165,233,0.4)" : "none",
         }}
       >
         {isCameraEnabled
@@ -229,7 +229,7 @@ function BottomNav({
         display: "flex",
         justifyContent: "center",
         backgroundImage: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 100%)",
-        borderTop: "3px solid rgba(9,141,113,0.3)",
+        borderTop: "3px solid rgba(56, 189, 248, 0.3)", // Đổi sang viền xanh dương sáng
         paddingTop: "0.875rem",
       }}
     >
@@ -276,13 +276,13 @@ function BottomNav({
                 background: isActive
                   ? isEmergency
                     ? "linear-gradient(135deg, #dc2626, #ef4444)"
-                    : "linear-gradient(135deg, var(--color-primary), #38bdf8)"
+                    : "linear-gradient(135deg, #0ea5e9, #38bdf8)"
                   : "transparent",
                 color: isActive ? "#fff" : isEmergency ? "#f87171" : "rgba(255,255,255,0.55)",
                 boxShadow: isActive
                   ? isEmergency
                     ? "0 6px 20px rgba(220,38,38,0.5)"
-                    : "0 6px 20px rgba(9,141,113,0.5)"
+                    : "0 6px 20px rgba(14,165,233,0.5)"
                   : "none",
                 transform: isActive ? "translateY(-4px) scale(1.08)" : "none",
               }}
@@ -363,7 +363,7 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
           position: relative;
           border-radius: 24px;
           overflow: hidden;
-          background: rgba(0, 0, 0, 0.2);
+          background: rgba(0, 0, 0, 0.25);
           border: 1px solid rgba(255, 255, 255, 0.05);
           padding: 1rem;
         }
@@ -372,9 +372,9 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
           flex: 0.75;
           display: flex;
           flex-direction: column;
-          background: rgba(15, 45, 74, 0.4);
+          background: rgba(15, 45, 74, 0.45);
           backdrop-filter: blur(12px);
-          border: 2px solid rgba(9, 141, 113, 0.25);
+          border: 2px solid rgba(56, 189, 248, 0.25); /* Đổi sang viền xanh dương nhẹ */
           border-radius: 24px;
           overflow: hidden;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -382,8 +382,8 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
 
         .mini-chat-header {
           padding: 1rem;
-          background: rgba(12, 30, 53, 0.8);
-          border-bottom: 2px solid rgba(9, 141, 113, 0.3);
+          background: rgba(12, 30, 53, 0.85);
+          border-bottom: 2px solid rgba(56, 189, 248, 0.3); /* Đổi sang viền xanh dương nhẹ */
           display: flex;
           align-items: center;
           gap: 0.5rem;
@@ -412,11 +412,11 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
           max-width: 85%;
           padding: 0.6rem 0.9rem;
           border-radius: 14px 14px 2px 14px;
-          background: linear-gradient(135deg, var(--color-primary), #38bdf8);
+          background: linear-gradient(135deg, #0ea5e9, #38bdf8);
           color: #fff;
           font-size: 0.95rem;
           line-height: 1.5;
-          box-shadow: 0 4px 10px rgba(9, 141, 113, 0.25);
+          box-shadow: 0 4px 10px rgba(14,165,233, 0.25);
         }
 
         .mini-msg-agent {
@@ -425,7 +425,7 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
           padding: 0.6rem 0.9rem;
           border-radius: 14px 14px 14px 2px;
           background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(9, 141, 113, 0.2);
+          border: 1px solid rgba(56, 189, 248, 0.2);
           color: #fff;
           font-size: 0.95rem;
           line-height: 1.5;
@@ -461,14 +461,15 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
         </div>
 
         {/* Camera / placeholder card */}
+        {/* Camera / placeholder card */}
         <div style={{
           position: "relative", zIndex: 10,
           width: "100%",
           borderRadius: 20,
           overflow: "hidden",
-          border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.1)"}`,
-          boxShadow: isCameraEnabled ? "0 0 30px rgba(9, 141, 113, 0.3)" : "none",
-          background: "#0a1a14",
+          border: `3px solid ${isCameraEnabled ? "#38bdf8" : "rgba(255,255,255,0.1)"}`,
+          boxShadow: isCameraEnabled ? "0 0 30px rgba(14, 165, 233, 0.3)" : "none",
+          background: "#000000", // <-- Thay đổi giá trị này từ "#0a1a14" thành "#000000"
           aspectRatio: "16/9",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
@@ -480,7 +481,7 @@ function HomeTab({ sentMessages }: { sentMessages: string[] }) {
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "4px 12px", borderRadius: 9999,
                 background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
-                border: "1.5px solid rgba(9,141,113,0.5)",
+                border: "1.5px solid rgba(56, 189, 248, 0.5)",
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7dd3fc", animation: "pulse-dot 2s ease-in-out infinite" }} />
                 <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
@@ -592,7 +593,7 @@ function ChatTab({
           gap: "0.75rem", padding: "1rem",
           background: "rgba(0,0,0,0.25)",
           borderRadius: 20,
-          border: "2px solid rgba(9,141,113,0.2)",
+          border: "2px solid rgba(56, 189, 248, 0.25)", // Đổi sang viền xanh dương nhẹ
         }}
       >
         {sentMessages.length === 0 && agentLines.length === 0 && (
@@ -611,8 +612,8 @@ function ChatTab({
             <div style={{
               maxWidth: "80%", padding: "0.75rem 1.1rem",
               borderRadius: "18px 18px 4px 18px",
-              background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
-              boxShadow: "0 4px 12px rgba(9,141,113,0.35)",
+              background: "linear-gradient(135deg, #0ea5e9, #38bdf8)",
+              boxShadow: "0 4px 12px rgba(14,165,233,0.35)",
               color: "#fff",
               fontFamily: "'Atkinson Hyperlegible', sans-serif",
               fontSize: "1rem", lineHeight: 1.6,
@@ -628,7 +629,7 @@ function ChatTab({
               maxWidth: "80%", padding: "0.75rem 1.1rem",
               borderRadius: "18px 18px 18px 4px",
               background: "rgba(255,255,255,0.08)",
-              border: "2px solid rgba(9,141,113,0.3)",
+              border: "2px solid rgba(56, 189, 248, 0.3)",
               color: "#fff",
               fontFamily: "'Atkinson Hyperlegible', sans-serif",
               fontSize: "1rem", lineHeight: 1.6,
@@ -656,15 +657,15 @@ function ChatTab({
             flex: 1, padding: "0.875rem 1.25rem",
             borderRadius: 14,
             background: "rgba(255,255,255,0.07)",
-            border: "2px solid rgba(9,141,113,0.35)",
+            border: "2px solid rgba(56, 189, 248, 0.35)", // Đổi sang viền xanh dương nhẹ
             color: "#fff",
             fontSize: "1rem",
             fontFamily: "'Atkinson Hyperlegible', sans-serif",
             outline: "none",
             transition: "border-color 0.2s",
           }}
-          onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
-          onBlur={(e) => (e.target.style.borderColor = "rgba(9,141,113,0.35)")}
+          onFocus={(e) => (e.target.style.borderColor = "#38bdf8")}
+          onBlur={(e) => (e.target.style.borderColor = "rgba(56, 189, 248, 0.35)")}
         />
         <button
           type="submit"
@@ -672,12 +673,12 @@ function ChatTab({
           style={{
             padding: "0 1.25rem",
             borderRadius: 14,
-            background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+            background: "linear-gradient(135deg, #0ea5e9, #38bdf8)",
             border: "none",
             color: "#fff",
             cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 14px rgba(9,141,113,0.4)",
+            boxShadow: "0 4px 14px rgba(14,165,233,0.4)",
             transition: "transform 0.15s, box-shadow 0.15s",
             minWidth: 52,
           }}
@@ -722,7 +723,7 @@ function FilesTab() {
       <div style={{
         width: "100%", maxWidth: 560,
         background: "rgba(0,0,0,0.2)",
-        border: "3px solid rgba(9,141,113,0.35)",
+        border: "3px solid rgba(56, 189, 248, 0.35)", // Đổi sang viền xanh dương nhẹ
         borderRadius: 24,
         padding: "2rem 1.5rem",
         display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
@@ -730,8 +731,8 @@ function FilesTab() {
       }}>
         <div style={{
           width: 80, height: 80, borderRadius: "50%",
-          background: "rgba(9,141,113,0.15)",
-          border: "3px solid rgba(9,141,113,0.4)",
+          background: "rgba(56, 189, 248, 0.15)", // Đổi sang nền xanh dương nhẹ
+          border: "3px solid rgba(56, 189, 248, 0.4)", // Đổi sang viền xanh dương nhẹ
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           <FileText size={38} color="#7dd3fc" aria-hidden="true" />
@@ -759,19 +760,19 @@ function FilesTab() {
             display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", gap: "0.75rem",
             borderRadius: 18,
-            border: "3px dashed rgba(9,141,113,0.5)",
-            background: "rgba(9,141,113,0.06)",
+            border: "3px dashed rgba(56, 189, 248, 0.5)", // Đổi sang viền xanh dương nhẹ
+            background: "rgba(56, 189, 248, 0.06)", // Đổi sang nền xanh dương nhẹ
             cursor: "pointer",
             transition: "all 0.2s ease",
             padding: "1.5rem",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget.style.background = "rgba(9,141,113,0.12)");
-            (e.currentTarget.style.borderColor = "var(--color-primary)");
+            (e.currentTarget.style.background = "rgba(56, 189, 248, 0.12)");
+            (e.currentTarget.style.borderColor = "#38bdf8");
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget.style.background = "rgba(9,141,113,0.06)");
-            (e.currentTarget.style.borderColor = "rgba(9,141,113,0.5)");
+            (e.currentTarget.style.background = "rgba(56, 189, 248, 0.06)");
+            (e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.5)");
           }}
         >
           <Upload size={36} color="#7dd3fc" aria-hidden="true" />
@@ -898,6 +899,7 @@ export default function AgentWorkspace() {
       if (mode === "chat") setActiveTab("chat");
       else if (mode === "files") setActiveTab("files");
       else if (mode === "object_detection") setActiveTab("home");
+      else if (mode === "emergency") setActiveTab("emergency");
     },
   });
 
@@ -906,7 +908,7 @@ export default function AgentWorkspace() {
       style={{
         display: "flex", flexDirection: "column",
         height: "100%", width: "100%",
-        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 60%, #0f2d4a 100%)",
+        background: "linear-gradient(135deg, #163b64 0%, #0e243d 50%, #163b64 100%)", // Nâng tông màu nền sáng và trong suốt hơn
         position: "relative", overflow: "hidden",
       }}
     >
