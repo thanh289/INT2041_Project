@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useRef, useEffect } from "react";
+import { FormEvent, useMemo, useState, useRef, useEffect, useCallback } from "react";
 import {
   useLocalParticipant,
   useVoiceAssistant,
@@ -9,7 +9,7 @@ import {
   useTrackTranscription,
   useChat,
 } from "@livekit/components-react";
-import type { ReceivedTranscriptionSegment } from "@livekit/components-core";
+import type { ReceivedChatMessage } from "@livekit/components-core";
 import {
   CameraOff,
   FileText,
@@ -24,6 +24,7 @@ import {
   Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { SendTextOptions } from "livekit-client";
 import { Track } from "livekit-client";
 import { motion, AnimatePresence } from "framer-motion";
 import AudioVisualizer from "./AudioVisualizer";
@@ -31,27 +32,20 @@ import { useAgentEvents } from "../hooks/useAgentEvents";
 
 type TabId = "home" | "chat" | "files" | "emergency";
 
+type UnifiedMessage = {
+  id: string;
+  sender: "user" | "agent";
+  text: string;
+  timestamp: number;
+};
+
 // ─────────────────────────────────────────
 // CUSTOM HOOK: UNIFIED MESSAGES
 // ─────────────────────────────────────────
 function useUnifiedMessages() {
   const { localParticipant } = useLocalParticipant();
-  const { agentTranscriptions: rawAgentTranscriptions } = useVoiceAssistant();
-  const [agentTranscriptions, setAgentTranscriptions] = useState<typeof rawAgentTranscriptions>([]);
-  
-  useEffect(() => {
-    if (rawAgentTranscriptions && rawAgentTranscriptions.length > 0) {
-      setAgentTranscriptions(prev => {
-        const merged = [...prev];
-        rawAgentTranscriptions.forEach(seg => {
-          const idx = merged.findIndex(s => s.id === seg.id);
-          if (idx !== -1) merged[idx] = seg;
-          else merged.push(seg);
-        });
-        return merged;
-      });
-    }
-  }, [rawAgentTranscriptions]);
+  const { agentTranscriptions } = useVoiceAssistant();
+  const [externalUserMessages, setExternalUserMessages] = useState<UnifiedMessage[]>([]);
 
   const { chatMessages, send } = useChat();
 
@@ -62,32 +56,17 @@ function useUnifiedMessages() {
     } : undefined;
   }, [localParticipant]);
 
-  const { segments: rawUserTranscriptions } = useTrackTranscription(userTrackRef);
-  const [userTranscriptions, setUserTranscriptions] = useState<ReceivedTranscriptionSegment[]>([]);
-
-  useEffect(() => {
-    if (rawUserTranscriptions && rawUserTranscriptions.length > 0) {
-      setUserTranscriptions(prev => {
-        const merged = [...prev];
-        rawUserTranscriptions.forEach(seg => {
-          const idx = merged.findIndex(s => s.id === seg.id);
-          if (idx !== -1) merged[idx] = seg;
-          else merged.push(seg);
-        });
-        return merged;
-      });
-    }
-  }, [rawUserTranscriptions]);
+  const { segments: userTranscriptions } = useTrackTranscription(userTrackRef);
 
   const unifiedMessages = useMemo(() => {
-    const combined: { id: string; sender: "user" | "agent"; text: string; timestamp: number }[] = [];
-    
+    const combined: UnifiedMessage[] = [];
+
     chatMessages.forEach((msg) => {
       combined.push({
         id: msg.id,
         sender: msg.from?.identity === localParticipant?.identity ? "user" : "agent",
         text: msg.message,
-        timestamp: msg.timestamp,
+        timestamp: msg.timestamp ?? 0,
       });
     });
 
@@ -97,7 +76,7 @@ function useUnifiedMessages() {
           id: s.id,
           sender: "user",
           text: s.text,
-          timestamp: s.firstReceivedTime || Date.now(),
+          timestamp: s.firstReceivedTime ?? s.lastReceivedTime ?? 0,
         });
       }
     });
@@ -108,22 +87,35 @@ function useUnifiedMessages() {
           id: s.id,
           sender: "agent",
           text: s.text,
-          timestamp: s.firstReceivedTime || Date.now(),
+          timestamp: s.firstReceivedTime ?? s.lastReceivedTime ?? 0,
         });
+      }
+    });
+
+    externalUserMessages.forEach((msg) => {
+      if (msg.text.trim()) {
+        combined.push(msg);
       }
     });
 
     combined.sort((a, b) => a.timestamp - b.timestamp);
     return combined;
-  }, [chatMessages, userTranscriptions, agentTranscriptions, localParticipant]);
+  }, [chatMessages, userTranscriptions, agentTranscriptions, externalUserMessages, localParticipant]);
 
-  return { unifiedMessages, send };
+  const addExternalUserMessage = useCallback((message: UnifiedMessage) => {
+    setExternalUserMessages((prev) => {
+      if (prev.some((existing) => existing.id === message.id)) return prev;
+      return [...prev, message];
+    });
+  }, []);
+
+  return { unifiedMessages, send, addExternalUserMessage };
 }
 
 // ─────────────────────────────────────────
 // REUSABLE CONVERSATION LOG
 // ─────────────────────────────────────────
-function ConversationLogBox({ unifiedMessages }: { unifiedMessages: any[] }) {
+function ConversationLogBox({ unifiedMessages }: { unifiedMessages: UnifiedMessage[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -460,7 +452,7 @@ function BottomNav({
 // ─────────────────────────────────────────
 // HOME TAB
 // ─────────────────────────────────────────
-function HomeTab({ unifiedMessages }: { unifiedMessages: any[] }) {
+function HomeTab({ unifiedMessages }: { unifiedMessages: UnifiedMessage[] }) {
   const { localParticipant, isCameraEnabled } = useLocalParticipant();
   const cameraPublication = localParticipant?.getTrackPublication(Track.Source.Camera);
   const trackRef = localParticipant && cameraPublication
@@ -538,7 +530,9 @@ function HomeTab({ unifiedMessages }: { unifiedMessages: any[] }) {
 // ─────────────────────────────────────────
 // CHAT TAB
 // ─────────────────────────────────────────
-function ChatTab({ unifiedMessages, send }: { unifiedMessages: any[]; send: (msg: string) => Promise<any> }) {
+type SendChatMessage = (message: string, options?: SendTextOptions) => Promise<ReceivedChatMessage>;
+
+function ChatTab({ unifiedMessages, send }: { unifiedMessages: UnifiedMessage[]; send: SendChatMessage }) {
   const [message, setMessage] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -671,7 +665,7 @@ function ChatTab({ unifiedMessages, send }: { unifiedMessages: any[]; send: (msg
 // ─────────────────────────────────────────
 // FILES TAB
 // ─────────────────────────────────────────
-function FilesTab({ unifiedMessages }: { unifiedMessages: any[] }) {
+function FilesTab({ unifiedMessages }: { unifiedMessages: UnifiedMessage[] }) {
   const { localParticipant } = useLocalParticipant();
   const [status, setStatus] = useState("Ready to receive file");
 
@@ -761,7 +755,7 @@ function FilesTab({ unifiedMessages }: { unifiedMessages: any[] }) {
             </span>
             <input
               type="file"
-              accept=".txt,.md,.json,.csv"
+              accept=".txt,.md,.json,.csv,.pdf"
               onChange={handleFileUpload}
               style={{ display: "none" }}
             />
@@ -872,7 +866,7 @@ function EmergencyTab() {
 // ─────────────────────────────────────────
 export default function AgentWorkspace() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
-  const { unifiedMessages, send } = useUnifiedMessages();
+  const { unifiedMessages, send, addExternalUserMessage } = useUnifiedMessages();
 
   useAgentEvents({
     onModeChange: (mode) => {
@@ -880,6 +874,14 @@ export default function AgentWorkspace() {
       else if (mode === "files") setActiveTab("files");
       else if (mode === "object_detection") setActiveTab("home");
       else if (mode === "emergency") setActiveTab("emergency");
+    },
+    onUserTranscript: (message) => {
+      addExternalUserMessage({
+        id: message.id,
+        sender: "user",
+        text: message.text,
+        timestamp: message.timestamp,
+      });
     },
   });
 

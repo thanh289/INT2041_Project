@@ -3,6 +3,7 @@ import base64
 import asyncio
 import io
 import json
+import uuid
 from storage import ConversationCache
 from dotenv import load_dotenv
 from datetime import datetime
@@ -493,6 +494,27 @@ async def entrypoint(ctx: agents.JobContext):
             # Doing so causes every message to be appended twice, producing duplicated responses.
             # This handler is only for persistence (cache + backend).
 
+            async def send_user_transcript_to_frontend(text: str) -> None:
+                try:
+                    room = get_job_context().room
+                    participant = next(iter(room.remote_participants.values()), None)
+                    if not participant:
+                        return
+
+                    payload = {
+                        "type": "user_transcript",
+                        "id": str(uuid.uuid4()),
+                        "text": text,
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                    }
+
+                    await room.local_participant.publish_data(
+                        json.dumps(payload),
+                        destination_identities=[participant.identity],
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending user transcript to frontend: {e}")
+
             # to iterate over all types of content:
             for content in event.item.content:
                 if isinstance(content, str):
@@ -500,6 +522,7 @@ async def entrypoint(ctx: agents.JobContext):
                         # USER input text
                         logger.info(f"[USER] {content}")
                         assistant.cache.add_user_message(content[:800])
+                        await send_user_transcript_to_frontend(content)
                     elif role == "assistant":
                         # AGENT response text
                         logger.info(f"[AGENT] {content}")

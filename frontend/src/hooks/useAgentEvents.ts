@@ -6,13 +6,14 @@ export type AgentMode = "object_detection" | "chat" | "files" | "emergency";
 
 type UseAgentEventsOptions = {
   onModeChange?: (mode: AgentMode) => void;
+  onUserTranscript?: (message: { id: string; text: string; timestamp: number }) => void;
 };
 
 function isAgentMode(value: unknown): value is AgentMode {
   return value === "object_detection" || value === "chat" || value === "files" || value === "emergency";
 }
 
-export function useAgentEvents({ onModeChange }: UseAgentEventsOptions = {}) {
+export function useAgentEvents({ onModeChange, onUserTranscript }: UseAgentEventsOptions = {}) {
   const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
 
@@ -83,6 +84,15 @@ export function useAgentEvents({ onModeChange }: UseAgentEventsOptions = {}) {
           return;
         }
 
+        if (data.type === "user_transcript" && typeof data.text === "string") {
+          onUserTranscript?.({
+            id: typeof data.id === "string" ? data.id : `user-${Date.now()}`,
+            text: data.text,
+            timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+          });
+          return;
+        }
+
         // Xử lý các lệnh điều khiển (Microphone, Camera, Chat) từ Agent
         if (typeof data.type === "string" && data.type.startsWith("control_")) {
           const target = data.type.replace("control_", "");
@@ -110,7 +120,7 @@ export function useAgentEvents({ onModeChange }: UseAgentEventsOptions = {}) {
     return () => {
       room.off("dataReceived", handleDataReceived);
     };
-  }, [room, localParticipant, onModeChange]);
+  }, [room, localParticipant, onModeChange, onUserTranscript]);
 }
 
 function announceToScreenReader(message: string) {

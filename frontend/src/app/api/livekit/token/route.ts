@@ -1,6 +1,9 @@
 import { AccessToken, AgentDispatchClient, RoomServiceClient } from 'livekit-server-sdk';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function getErrorCode(err: unknown): string | undefined {
   if (typeof err === 'object' && err !== null && 'code' in err) {
     return (err as { code?: string }).code;
