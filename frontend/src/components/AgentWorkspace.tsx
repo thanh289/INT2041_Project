@@ -6,8 +6,6 @@ import {
   useVoiceAssistant,
   VideoTrack,
   useRemoteParticipants,
-  useChat,
-  useTrackTranscription,
 } from "@livekit/components-react";
 import {
   CameraOff,
@@ -29,94 +27,6 @@ import AudioVisualizer from "./AudioVisualizer";
 import { useAgentEvents } from "../hooks/useAgentEvents";
 
 type TabId = "home" | "chat" | "files" | "emergency";
-
-// ─────────────────────────────────────────
-// CUSTOM HOOK: UNIFIED MESSAGES
-// ─────────────────────────────────────────
-function useUnifiedMessages() {
-  const { localParticipant } = useLocalParticipant();
-  const { agentTranscriptions: rawAgentTranscriptions } = useVoiceAssistant();
-  const [agentTranscriptions, setAgentTranscriptions] = useState<typeof rawAgentTranscriptions>([]);
-  useEffect(() => {
-    if (rawAgentTranscriptions && rawAgentTranscriptions.length > 0) {
-      setAgentTranscriptions(prev => {
-        const merged = [...prev];
-        rawAgentTranscriptions.forEach(seg => {
-          const idx = merged.findIndex(s => s.id === seg.id);
-          if (idx !== -1) merged[idx] = seg;
-          else merged.push(seg);
-        });
-        return merged;
-      });
-    }
-  }, [rawAgentTranscriptions]);
-
-  const { chatMessages, send } = useChat();
-
-  const userTrackRef = useMemo(() => {
-    return localParticipant ? {
-      participant: localParticipant,
-      source: Track.Source.Microphone,
-    } : undefined;
-  }, [localParticipant]);
-
-  const { segments: rawUserTranscriptions } = useTrackTranscription(userTrackRef);
-  
-  // Keep a persistent state of user transcriptions so they never disappear
-  const [userTranscriptions, setUserTranscriptions] = useState<typeof rawUserTranscriptions>([]);
-  useEffect(() => {
-    if (rawUserTranscriptions && rawUserTranscriptions.length > 0) {
-      setUserTranscriptions(prev => {
-        const merged = [...prev];
-        rawUserTranscriptions.forEach(seg => {
-          const idx = merged.findIndex(s => s.id === seg.id);
-          if (idx !== -1) merged[idx] = seg;
-          else merged.push(seg);
-        });
-        return merged;
-      });
-    }
-  }, [rawUserTranscriptions]);
-
-  const unifiedMessages = useMemo(() => {
-    const combined: { id: string; sender: "user" | "agent"; text: string; timestamp: number }[] = [];
-
-    chatMessages.forEach((msg) => {
-      combined.push({
-        id: msg.id || String(msg.timestamp),
-        sender: "user",
-        text: msg.message,
-        timestamp: msg.timestamp,
-      });
-    });
-
-    userTranscriptions.forEach((s) => {
-      if (s.text.trim()) {
-        combined.push({
-          id: s.id,
-          sender: "user",
-          text: s.text,
-          timestamp: s.receivedAt || Date.now(),
-        });
-      }
-    });
-
-    agentTranscriptions.forEach((s) => {
-      if (s.text.trim()) {
-        combined.push({
-          id: s.id,
-          sender: "agent",
-          text: s.text,
-          timestamp: s.receivedAt || Date.now(),
-        });
-      }
-    });
-
-    return combined.sort((a, b) => a.timestamp - b.timestamp);
-  }, [chatMessages, userTranscriptions, agentTranscriptions]);
-
-  return { unifiedMessages, send };
-}
 
 // ─────────────────────────────────────────
 // STATUS HEADER
@@ -407,487 +317,31 @@ function BottomNav({
 }
 
 // ─────────────────────────────────────────
-// REUSABLE CONVERSATION LOG
+// HOME TAB
 // ─────────────────────────────────────────
-function ConversationLogBox({ unifiedMessages }: { unifiedMessages: any[] }) {
+function HomeTab({ sentMessages }: { sentMessages: string[] }) {
+  const { localParticipant, isCameraEnabled } = useLocalParticipant();
+  const { agentTranscriptions } = useVoiceAssistant();
+  const cameraPublication = localParticipant?.getTrackPublication(Track.Source.Camera);
+  const trackRef = localParticipant && cameraPublication
+    ? { participant: localParticipant, source: Track.Source.Camera, publication: cameraPublication }
+    : null;
+
+  const agentLines = useMemo(
+    () => agentTranscriptions.map((s) => s.text).filter(Boolean),
+    [agentTranscriptions]
+  );
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [unifiedMessages]);
-
-  return (
-    <div className="home-right-col" role="log" aria-live="polite" aria-label="Quick conversation log">
-      <div className="mini-chat-header">
-        <MessageSquareText size={18} color="#7dd3fc" aria-hidden="true" />
-        <span className="mini-chat-title">Conversation Log</span>
-      </div>
-      <div ref={scrollRef} className="mini-chat-body">
-        {unifiedMessages.length === 0 && (
-          <div style={{
-            margin: "auto", textAlign: "center",
-            color: "rgba(255,255,255,0.25)", fontWeight: 700,
-            fontSize: "0.85rem", letterSpacing: "0.06em", textTransform: "uppercase",
-            fontFamily: "'Atkinson Hyperlegible', sans-serif",
-          }}>
-            No messages yet
-          </div>
-        )}
-
-        {unifiedMessages.map((msg) => (
-          msg.sender === "user" ? (
-            <div key={`mini-u-${msg.id}`} className="mini-msg-user">
-              {msg.text}
-            </div>
-          ) : (
-            <div key={`mini-a-${msg.id}`} className="mini-msg-agent">
-              <span style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.15rem", textTransform: "uppercase" }}>
-                Assistant
-              </span>
-              {msg.text}
-            </div>
-          )
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// HOME TAB
-// ─────────────────────────────────────────
-function HomeTab({ unifiedMessages }: { unifiedMessages: any[] }) {
-  const { localParticipant, isCameraEnabled } = useLocalParticipant();
-  const cameraPublication = localParticipant?.getTrackPublication(Track.Source.Camera);
-  const trackRef = localParticipant && cameraPublication
-    ? { participant: localParticipant, source: Track.Source.Camera, publication: cameraPublication }
-    : null;
+  }, [sentMessages, agentLines]);
 
   return (
     <div className="home-tab-container">
-      {/* Left Column: Visualizer and Camera */}
-      <div className="home-left-col">
-        {/* Audio visualizer background */}
-        <div style={{
-          position: "absolute", inset: 0,
-          opacity: isCameraEnabled ? 0.2 : 0.85,
-          transition: "opacity 0.5s ease",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <AudioVisualizer />
-        </div>
-
-        {/* Camera / placeholder card */}
-        <div style={{
-          position: "relative", zIndex: 10,
-          width: "100%",
-          borderRadius: 20,
-          overflow: "hidden",
-          border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.1)"}`,
-          boxShadow: isCameraEnabled ? "0 0 30px rgba(9, 141, 113, 0.3)" : "none",
-          background: "#0a1a14",
-          aspectRatio: "16/9",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {isCameraEnabled && trackRef ? (
-            <>
-              {/* Live badge */}
-              <div style={{
-                position: "absolute", top: 12, left: 12, zIndex: 10,
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "4px 12px", borderRadius: 9999,
-                background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
-                border: "1.5px solid rgba(9,141,113,0.5)",
-              }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7dd3fc", animation: "pulse-dot 2s ease-in-out infinite" }} />
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                  Vision Active
-                </span>
-              </div>
-              <VideoTrack trackRef={trackRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            </>
-          ) : (
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem",
-              padding: "2rem",
-            }}>
-              <CameraOff size={52} color="rgba(255,255,255,0.25)" aria-hidden="true" />
-              <span style={{
-                fontSize: "1rem", fontWeight: 700, color: "rgba(255,255,255,0.35)",
-                letterSpacing: "0.1em", textTransform: "uppercase",
-                fontFamily: "'Atkinson Hyperlegible', sans-serif",
-              }}>
-                Camera is OFF
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Right Column: Mini Chatbox */}
-      <ConversationLogBox unifiedMessages={unifiedMessages} />
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// CHAT TAB
-// ─────────────────────────────────────────
-function ChatTab({ unifiedMessages, send }: { unifiedMessages: any[]; send: (msg: string) => Promise<any> }) {
-  const [message, setMessage] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const sendMessage = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const text = message.trim();
-    if (!text) return;
-    await send(text);
-    setMessage("");
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, 100);
-  };
-
-  return (
-    <div style={{
-      flex: 1, display: "flex", flexDirection: "column",
-      padding: "0.875rem", overflow: "hidden", gap: "0.75rem",
-    }}>
-      {/* Message list */}
-      <div
-        ref={scrollRef}
-        role="log"
-        aria-live="polite"
-        aria-label="Chat history"
-        style={{
-          flex: 1, overflowY: "auto", display: "flex", flexDirection: "column",
-          gap: "0.75rem", padding: "1rem",
-          background: "rgba(0,0,0,0.25)",
-          borderRadius: 20,
-          border: "2px solid rgba(9,141,113,0.2)",
-        }}
-      >
-        {unifiedMessages.length === 0 && (
-          <div style={{
-            margin: "auto", textAlign: "center",
-            color: "rgba(255,255,255,0.3)", fontWeight: 700,
-            fontSize: "1rem", letterSpacing: "0.06em", textTransform: "uppercase",
-            fontFamily: "'Atkinson Hyperlegible', sans-serif",
-          }}>
-            No messages yet
-          </div>
-        )}
-
-        {unifiedMessages.map((msg) => (
-          msg.sender === "user" ? (
-            <div key={`u-${msg.id}`} style={{ display: "flex", justifyContent: "flex-end" }}>
-              <div style={{
-                maxWidth: "80%", padding: "0.75rem 1.1rem",
-                borderRadius: "18px 18px 4px 18px",
-                background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
-                boxShadow: "0 4px 12px rgba(9,141,113,0.35)",
-                color: "#fff",
-                fontFamily: "'Atkinson Hyperlegible', sans-serif",
-                fontSize: "1rem", lineHeight: 1.6,
-              }}>
-                {msg.text}
-              </div>
-            </div>
-          ) : (
-            <div key={`a-${msg.id}`} style={{ display: "flex", justifyContent: "flex-start" }}>
-              <div style={{
-                maxWidth: "80%", padding: "0.75rem 1.1rem",
-                borderRadius: "18px 18px 18px 4px",
-                background: "rgba(255,255,255,0.08)",
-                border: "2px solid rgba(9,141,113,0.3)",
-                color: "#fff",
-                fontFamily: "'Atkinson Hyperlegible', sans-serif",
-                fontSize: "1rem", lineHeight: 1.6,
-              }}>
-                <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  Assistant
-                </span>
-                {msg.text}
-              </div>
-            </div>
-          )
-        ))}
-      </div>
-
-      {/* Input */}
-      <form
-        onSubmit={sendMessage}
-        style={{ display: "flex", gap: "0.625rem", flexShrink: 0 }}
-      >
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type a message..."
-          aria-label="Type a message to chat with AI"
-          style={{
-            flex: 1, padding: "0.875rem 1.25rem",
-            borderRadius: 14,
-            background: "rgba(255,255,255,0.07)",
-            border: "2px solid rgba(9,141,113,0.35)",
-            color: "#fff",
-            fontSize: "1rem",
-            fontFamily: "'Atkinson Hyperlegible', sans-serif",
-            outline: "none",
-            transition: "border-color 0.2s",
-          }}
-          onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
-          onBlur={(e) => (e.target.style.borderColor = "rgba(9,141,113,0.35)")}
-        />
-        <button
-          type="submit"
-          aria-label="Send message"
-          style={{
-            padding: "0 1.25rem",
-            borderRadius: 14,
-            background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
-            border: "none",
-            color: "#fff",
-            cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 14px rgba(9,141,113,0.4)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            minWidth: 52,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget.style.transform = "scale(1.05)"); }}
-          onMouseLeave={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
-        >
-          <Send size={22} aria-hidden="true" />
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// FILES TAB
-// ─────────────────────────────────────────
-function FilesTab({ unifiedMessages }: { unifiedMessages: any[] }) {
-  const { localParticipant } = useLocalParticipant();
-  const [status, setStatus] = useState("Ready to receive file");
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !localParticipant) return;
-    setStatus(`Processing: ${file.name}...`);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        await localParticipant.sendText(`File uploaded: ${file.name}. Please summarize the content.`, { topic: "lk.chat" });
-        setStatus(`Sent: ${file.name}`);
-      } catch {
-        setStatus("Error sending file to AI.");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  return (
-    <div className="home-tab-container">
-      {/* Left Column: File Upload */}
-      <div className="home-left-col" style={{ background: "transparent", border: "none" }}>
-        <div style={{
-          width: "100%", maxWidth: 560,
-          background: "rgba(0,0,0,0.2)",
-          border: "3px solid rgba(9,141,113,0.35)",
-          borderRadius: 24,
-          padding: "2rem 1.5rem",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
-          textAlign: "center",
-          margin: "auto",
-        }}>
-          <div style={{
-            width: 80, height: 80, borderRadius: "50%",
-            background: "rgba(9,141,113,0.15)",
-            border: "3px solid rgba(9,141,113,0.4)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <FileText size={38} color="#7dd3fc" aria-hidden="true" />
-          </div>
-
-          <div>
-            <h2 style={{
-              fontFamily: "'Atkinson Hyperlegible', sans-serif",
-              fontSize: "1.375rem", fontWeight: 700, color: "#fff",
-              letterSpacing: "0.04em", marginBottom: "0.5rem",
-            }}>
-              Assistant File Reader
-            </h2>
-            <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
-              Upload a text file for the AI to read and summarize the content for you.
-            </p>
-          </div>
-
-          <label
-            tabIndex={0}
-            role="button"
-            aria-label="Upload file to read"
-            style={{
-              width: "100%", minHeight: 140,
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center", gap: "0.75rem",
-              borderRadius: 18,
-              border: "3px dashed rgba(9,141,113,0.5)",
-              background: "rgba(9,141,113,0.06)",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              padding: "1.5rem",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget.style.background = "rgba(9,141,113,0.12)");
-              (e.currentTarget.style.borderColor = "var(--color-primary)");
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget.style.background = "rgba(9,141,113,0.06)");
-              (e.currentTarget.style.borderColor = "rgba(9,141,113,0.5)");
-            }}
-          >
-            <Upload size={36} color="#7dd3fc" aria-hidden="true" />
-            <span style={{
-              fontFamily: "'Atkinson Hyperlegible', sans-serif",
-              fontSize: "1rem", fontWeight: 700, color: "#7dd3fc",
-              letterSpacing: "0.06em", textTransform: "uppercase",
-            }}>
-              {status}
-            </span>
-            <input
-              type="file"
-              accept=".txt,.md,.json,.csv"
-              onChange={handleFileUpload}
-              style={{ display: "none" }}
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* Right Column: Mini Chatbox */}
-      <ConversationLogBox unifiedMessages={unifiedMessages} />
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// EMERGENCY TAB
-// ─────────────────────────────────────────
-function EmergencyTab() {
-  const { localParticipant } = useLocalParticipant();
-
-  const triggerSos = async () => {
-    if (!localParticipant) {
-      alert("Not connected to assistant.");
-      return;
-    }
-    let coords: unknown = null;
-    const coordsStr = localStorage.getItem("user_coords");
-    if (coordsStr) {
-      try { coords = JSON.parse(coordsStr); } catch { /* ignore */ }
-    }
-    try {
-      const payload = { type: "sos_trigger", data: coords };
-      await localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(payload)),
-        { reliable: true }
-      );
-      alert("SOS sent. Notifying emergency contacts.");
-    } catch {
-      alert("SOS failed. Please try again.");
-    }
-  };
-
-  return (
-    <div style={{
-      flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "1rem",
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 480,
-        background: "rgba(0,0,0,0.25)",
-        border: "3px solid rgba(239,68,68,0.4)",
-        borderRadius: 24,
-        padding: "2rem 1.5rem",
-        display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
-        textAlign: "center",
-      }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: "50%",
-          background: "rgba(239,68,68,0.12)",
-          border: "3px solid rgba(239,68,68,0.4)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <AlertTriangle size={34} color="#f87171" aria-hidden="true" />
-        </div>
-
-        <div>
-          <h2 style={{
-            fontFamily: "'Atkinson Hyperlegible', sans-serif",
-            fontSize: "1.375rem", fontWeight: 700, color: "#fff",
-            marginBottom: "0.5rem",
-          }}>
-            Emergency SOS
-          </h2>
-          <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
-            Tap the button below to send location and emergency alert.
-          </p>
-        </div>
-
-        <button
-          onClick={triggerSos}
-          aria-label="Send SOS signal now"
-          style={{
-            width: "100%", minHeight: 120,
-            borderRadius: 20,
-            border: "3px solid rgba(220,38,38,0.7)",
-            background: "linear-gradient(135deg, #dc2626, #ef4444)",
-            color: "#fff",
-            cursor: "pointer",
-            fontFamily: "'Atkinson Hyperlegible', sans-serif",
-            fontSize: "2rem", fontWeight: 700,
-            letterSpacing: "0.12em", textTransform: "uppercase",
-            boxShadow: "0 8px 32px rgba(220,38,38,0.45)",
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
-          onMouseLeave={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
-          onMouseDown={(e) => { (e.currentTarget.style.transform = "scale(0.98)"); }}
-          onMouseUp={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
-        >
-          SEND SOS
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────
-// MAIN WORKSPACE
-// ─────────────────────────────────────────
-export default function AgentWorkspace() {
-  const [activeTab, setActiveTab] = useState<TabId>("home");
-  const { unifiedMessages, send } = useUnifiedMessages();
-
-  useAgentEvents({
-    onModeChange: (mode) => {
-      if (mode === "chat") setActiveTab("chat");
-      else if (mode === "files") setActiveTab("files");
-      else if (mode === "object_detection") setActiveTab("home");
-    },
-  });
-
-  return (
-    <div
-      style={{
-        display: "flex", flexDirection: "column",
-        height: "100%", width: "100%",
-        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 60%, #0f2d4a 100%)",
-        position: "relative", overflow: "hidden",
-      }}
-    >
       <style>{`
         .home-tab-container {
           flex: 1;
@@ -994,6 +448,468 @@ export default function AgentWorkspace() {
         }
       `}</style>
 
+      {/* Left Column: Visualizer and Camera */}
+      <div className="home-left-col">
+        {/* Audio visualizer background */}
+        <div style={{
+          position: "absolute", inset: 0,
+          opacity: isCameraEnabled ? 0.2 : 0.85,
+          transition: "opacity 0.5s ease",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <AudioVisualizer />
+        </div>
+
+        {/* Camera / placeholder card */}
+        <div style={{
+          position: "relative", zIndex: 10,
+          width: "100%",
+          borderRadius: 20,
+          overflow: "hidden",
+          border: `3px solid ${isCameraEnabled ? "var(--color-primary)" : "rgba(255,255,255,0.1)"}`,
+          boxShadow: isCameraEnabled ? "0 0 30px rgba(9, 141, 113, 0.3)" : "none",
+          background: "#0a1a14",
+          aspectRatio: "16/9",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {isCameraEnabled && trackRef ? (
+            <>
+              {/* Live badge */}
+              <div style={{
+                position: "absolute", top: 12, left: 12, zIndex: 10,
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "4px 12px", borderRadius: 9999,
+                background: "rgba(0,0,0,0.65)", backdropFilter: "blur(8px)",
+                border: "1.5px solid rgba(9,141,113,0.5)",
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7dd3fc", animation: "pulse-dot 2s ease-in-out infinite" }} />
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Vision Active
+                </span>
+              </div>
+              <VideoTrack trackRef={trackRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </>
+          ) : (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem",
+              padding: "2rem",
+            }}>
+              <CameraOff size={52} color="rgba(255,255,255,0.25)" aria-hidden="true" />
+              <span style={{
+                fontSize: "1rem", fontWeight: 700, color: "rgba(255,255,255,0.35)",
+                letterSpacing: "0.1em", textTransform: "uppercase",
+                fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              }}>
+                Camera is OFF
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right Column: Mini Chatbox */}
+      <div className="home-right-col" role="log" aria-live="polite" aria-label="Quick conversation log">
+        <div className="mini-chat-header">
+          <MessageSquareText size={18} color="#7dd3fc" aria-hidden="true" />
+          <span className="mini-chat-title">Conversation Log</span>
+        </div>
+        <div ref={scrollRef} className="mini-chat-body">
+          {sentMessages.length === 0 && agentLines.length === 0 && (
+            <div style={{
+              margin: "auto", textAlign: "center",
+              color: "rgba(255,255,255,0.25)", fontWeight: 700,
+              fontSize: "0.85rem", letterSpacing: "0.06em", textTransform: "uppercase",
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            }}>
+              No messages yet
+            </div>
+          )}
+
+          {sentMessages.map((text, i) => (
+            <div key={`mini-u-${i}`} className="mini-msg-user">
+              {text}
+            </div>
+          ))}
+          {agentLines.map((text, i) => (
+            <div key={`mini-a-${i}`} className="mini-msg-agent">
+              <span style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.15rem", textTransform: "uppercase" }}>
+                Assistant
+              </span>
+              {text}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// CHAT TAB
+// ─────────────────────────────────────────
+function ChatTab({
+  sentMessages,
+  setSentMessages,
+}: {
+  sentMessages: string[];
+  setSentMessages: React.Dispatch<React.SetStateAction<string[]>>;
+}) {
+  const { localParticipant } = useLocalParticipant();
+  const { agentTranscriptions } = useVoiceAssistant();
+  const [message, setMessage] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const agentLines = useMemo(
+    () => agentTranscriptions.map((s) => s.text).filter(Boolean),
+    [agentTranscriptions]
+  );
+
+  const sendMessage = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const text = message.trim();
+    if (!text || !localParticipant) return;
+    await localParticipant.sendText(text, { topic: "lk.chat" });
+    setSentMessages((prev) => [...prev, text]);
+    setMessage("");
+    setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, 100);
+  };
+
+  return (
+    <div style={{
+      flex: 1, display: "flex", flexDirection: "column",
+      padding: "0.875rem", overflow: "hidden", gap: "0.75rem",
+    }}>
+      {/* Message list */}
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Chat history"
+        style={{
+          flex: 1, overflowY: "auto", display: "flex", flexDirection: "column",
+          gap: "0.75rem", padding: "1rem",
+          background: "rgba(0,0,0,0.25)",
+          borderRadius: 20,
+          border: "2px solid rgba(9,141,113,0.2)",
+        }}
+      >
+        {sentMessages.length === 0 && agentLines.length === 0 && (
+          <div style={{
+            margin: "auto", textAlign: "center",
+            color: "rgba(255,255,255,0.3)", fontWeight: 700,
+            fontSize: "1rem", letterSpacing: "0.06em", textTransform: "uppercase",
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+          }}>
+            No messages yet
+          </div>
+        )}
+
+        {sentMessages.map((text, i) => (
+          <div key={`u-${i}`} style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{
+              maxWidth: "80%", padding: "0.75rem 1.1rem",
+              borderRadius: "18px 18px 4px 18px",
+              background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+              boxShadow: "0 4px 12px rgba(9,141,113,0.35)",
+              color: "#fff",
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              fontSize: "1rem", lineHeight: 1.6,
+            }}>
+              {text}
+            </div>
+          </div>
+        ))}
+
+        {agentLines.map((text, i) => (
+          <div key={`a-${i}`} style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{
+              maxWidth: "80%", padding: "0.75rem 1.1rem",
+              borderRadius: "18px 18px 18px 4px",
+              background: "rgba(255,255,255,0.08)",
+              border: "2px solid rgba(9,141,113,0.3)",
+              color: "#fff",
+              fontFamily: "'Atkinson Hyperlegible', sans-serif",
+              fontSize: "1rem", lineHeight: 1.6,
+            }}>
+              <span style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#7dd3fc", marginBottom: "0.3rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Assistant
+              </span>
+              {text}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Input */}
+      <form
+        onSubmit={sendMessage}
+        style={{ display: "flex", gap: "0.625rem", flexShrink: 0 }}
+      >
+        <input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type a message..."
+          aria-label="Type a message to chat with AI"
+          style={{
+            flex: 1, padding: "0.875rem 1.25rem",
+            borderRadius: 14,
+            background: "rgba(255,255,255,0.07)",
+            border: "2px solid rgba(9,141,113,0.35)",
+            color: "#fff",
+            fontSize: "1rem",
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            outline: "none",
+            transition: "border-color 0.2s",
+          }}
+          onFocus={(e) => (e.target.style.borderColor = "var(--color-primary)")}
+          onBlur={(e) => (e.target.style.borderColor = "rgba(9,141,113,0.35)")}
+        />
+        <button
+          type="submit"
+          aria-label="Send message"
+          style={{
+            padding: "0 1.25rem",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, var(--color-primary), #38bdf8)",
+            border: "none",
+            color: "#fff",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 14px rgba(9,141,113,0.4)",
+            transition: "transform 0.15s, box-shadow 0.15s",
+            minWidth: 52,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget.style.transform = "scale(1.05)"); }}
+          onMouseLeave={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
+        >
+          <Send size={22} aria-hidden="true" />
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// FILES TAB
+// ─────────────────────────────────────────
+function FilesTab() {
+  const { localParticipant } = useLocalParticipant();
+  const [status, setStatus] = useState("Ready to receive file");
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !localParticipant) return;
+    setStatus(`Processing: ${file.name}...`);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        await localParticipant.sendText(`File uploaded: ${file.name}. Please summarize the content.`, { topic: "lk.chat" });
+        setStatus(`Sent: ${file.name}`);
+      } catch {
+        setStatus("Error sending file to AI.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "1rem",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 560,
+        background: "rgba(0,0,0,0.2)",
+        border: "3px solid rgba(9,141,113,0.35)",
+        borderRadius: 24,
+        padding: "2rem 1.5rem",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
+        textAlign: "center",
+      }}>
+        <div style={{
+          width: 80, height: 80, borderRadius: "50%",
+          background: "rgba(9,141,113,0.15)",
+          border: "3px solid rgba(9,141,113,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <FileText size={38} color="#7dd3fc" aria-hidden="true" />
+        </div>
+
+        <div>
+          <h2 style={{
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "1.375rem", fontWeight: 700, color: "#fff",
+            letterSpacing: "0.04em", marginBottom: "0.5rem",
+          }}>
+            Assistant File Reader
+          </h2>
+          <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
+            Upload a text file for the AI to read and summarize the content for you.
+          </p>
+        </div>
+
+        <label
+          tabIndex={0}
+          role="button"
+          aria-label="Upload file to read"
+          style={{
+            width: "100%", minHeight: 140,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: "0.75rem",
+            borderRadius: 18,
+            border: "3px dashed rgba(9,141,113,0.5)",
+            background: "rgba(9,141,113,0.06)",
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            padding: "1.5rem",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget.style.background = "rgba(9,141,113,0.12)");
+            (e.currentTarget.style.borderColor = "var(--color-primary)");
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget.style.background = "rgba(9,141,113,0.06)");
+            (e.currentTarget.style.borderColor = "rgba(9,141,113,0.5)");
+          }}
+        >
+          <Upload size={36} color="#7dd3fc" aria-hidden="true" />
+          <span style={{
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "1rem", fontWeight: 700, color: "#7dd3fc",
+            letterSpacing: "0.06em", textTransform: "uppercase",
+          }}>
+            {status}
+          </span>
+          <input
+            type="file"
+            accept=".txt,.md,.json,.csv"
+            onChange={handleFileUpload}
+            style={{ display: "none" }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// EMERGENCY TAB
+// ─────────────────────────────────────────
+function EmergencyTab() {
+  const { localParticipant } = useLocalParticipant();
+
+  const triggerSos = async () => {
+    if (!localParticipant) {
+      alert("Not connected to assistant.");
+      return;
+    }
+    let coords: unknown = null;
+    const coordsStr = localStorage.getItem("user_coords");
+    if (coordsStr) {
+      try { coords = JSON.parse(coordsStr); } catch { /* ignore */ }
+    }
+    try {
+      const payload = { type: "sos_trigger", data: coords };
+      await localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(payload)),
+        { reliable: true }
+      );
+      alert("SOS sent. Notifying emergency contacts.");
+    } catch {
+      alert("SOS failed. Please try again.");
+    }
+  };
+
+  return (
+    <div style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "1rem",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 480,
+        background: "rgba(0,0,0,0.25)",
+        border: "3px solid rgba(239,68,68,0.4)",
+        borderRadius: 24,
+        padding: "2rem 1.5rem",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
+        textAlign: "center",
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: "rgba(239,68,68,0.12)",
+          border: "3px solid rgba(239,68,68,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <AlertTriangle size={34} color="#f87171" aria-hidden="true" />
+        </div>
+
+        <div>
+          <h2 style={{
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "1.375rem", fontWeight: 700, color: "#fff",
+            marginBottom: "0.5rem",
+          }}>
+            Emergency SOS
+          </h2>
+          <p style={{ fontSize: "0.95rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
+            Tap the button below to send location and emergency alert.
+          </p>
+        </div>
+
+        <button
+          onClick={triggerSos}
+          aria-label="Send SOS signal now"
+          style={{
+            width: "100%", minHeight: 120,
+            borderRadius: 20,
+            border: "3px solid rgba(220,38,38,0.7)",
+            background: "linear-gradient(135deg, #dc2626, #ef4444)",
+            color: "#fff",
+            cursor: "pointer",
+            fontFamily: "'Atkinson Hyperlegible', sans-serif",
+            fontSize: "2rem", fontWeight: 700,
+            letterSpacing: "0.12em", textTransform: "uppercase",
+            boxShadow: "0 8px 32px rgba(220,38,38,0.45)",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
+          onMouseLeave={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
+          onMouseDown={(e) => { (e.currentTarget.style.transform = "scale(0.98)"); }}
+          onMouseUp={(e) => { (e.currentTarget.style.transform = "scale(1.02)"); }}
+        >
+          SEND SOS
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────
+// MAIN WORKSPACE
+// ─────────────────────────────────────────
+export default function AgentWorkspace() {
+  const [activeTab, setActiveTab] = useState<TabId>("home");
+  const [sentMessages, setSentMessages] = useState<string[]>([]);
+
+  useAgentEvents({
+    onModeChange: (mode) => {
+      if (mode === "chat") setActiveTab("chat");
+      else if (mode === "files") setActiveTab("files");
+      else if (mode === "object_detection") setActiveTab("home");
+    },
+  });
+
+  return (
+    <div
+      style={{
+        display: "flex", flexDirection: "column",
+        height: "100%", width: "100%",
+        background: "linear-gradient(135deg, #0f2d4a 0%, #0c1e35 60%, #0f2d4a 100%)",
+        position: "relative", overflow: "hidden",
+      }}
+    >
       <div id="a11y-announcer" aria-live="assertive" className="sr-only" />
 
       {/* Header */}
@@ -1013,9 +929,9 @@ export default function AgentWorkspace() {
             transition={{ duration: 0.25, ease: "easeInOut" }}
             style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column" }}
           >
-            {activeTab === "home" && <HomeTab unifiedMessages={unifiedMessages} />}
-            {activeTab === "chat" && <ChatTab unifiedMessages={unifiedMessages} send={send} />}
-            {activeTab === "files" && <FilesTab unifiedMessages={unifiedMessages} />}
+            {activeTab === "home" && <HomeTab sentMessages={sentMessages} />}
+            {activeTab === "chat" && <ChatTab sentMessages={sentMessages} setSentMessages={setSentMessages} />}
+            {activeTab === "files" && <FilesTab />}
             {activeTab === "emergency" && <EmergencyTab />}
           </motion.div>
         </AnimatePresence>
