@@ -71,40 +71,6 @@ npm run dev
 
 Open http://localhost:3000
 
-## Environment Variables
-
-### Backend (.env)
-
-- PORT
-- JWT_ISSUER
-- JWT_AUDIENCE
-- JWT_KEY
-- SQLITE_FILE
-
-### AI Agent (.env)
-
-- LIVEKIT_API_KEY
-- LIVEKIT_API_SECRET
-- LIVEKIT_URL
-- NEXT_PUBLIC_LIVEKIT_URL
-- LIVEKIT_AGENT_NAME (optional)
-- DEEPSEEK_API_KEY
-- GOOGLE_API_KEY
-- GEMINI_MODEL
-- AZURE_SPEECH_KEY
-- AZURE_SPEECH_REGION
-- OPENWEATHER_API_KEY
-- BACKEND_BASE_URL
-- EMAIL_SENDER
-- EMAIL_RECEIVER
-- EMAIL_APP_PASSWORD
-
-### Frontend (optional .env.local)
-
-- NEXT_PUBLIC_LIVEKIT_URL
-- LIVEKIT_API_KEY
-- LIVEKIT_API_SECRET
-- LIVEKIT_AGENT_NAME (optional)
 
 ## Core Features
 
@@ -114,21 +80,3 @@ Open http://localhost:3000
 - Weather lookup and currency identification
 - Emergency SOS with location sharing
 - Conversation history sync between agent and backend
-
-## API Endpoints (Backend)
-
-- POST /api/account/register
-- POST /api/account/login
-- GET  /api/capabilities
-- POST /api/messages
-- GET  /api/conversation-history?limit=20
-
-## Notes
-
-- The frontend creates a LiveKit token at /api/livekit/token.
-- The AI agent and frontend must join the same LiveKit room.
-- If you hear duplicate responses, ensure only one agent worker is running.
-
-## License
-
-MIT
