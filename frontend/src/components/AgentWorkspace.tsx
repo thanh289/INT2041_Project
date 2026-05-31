@@ -48,6 +48,25 @@ function useUnifiedMessages() {
   const [externalUserMessages, setExternalUserMessages] = useState<UnifiedMessage[]>([]);
 
   const { chatMessages, send } = useChat();
+  const recentChatSendsRef = useRef<Array<{ text: string; timestamp: number }>>([]);
+
+  const normalizeText = useCallback((value: string) => {
+    return value.trim().toLowerCase().replace(/\s+/g, " ");
+  }, []);
+
+  const trackRecentSend = useCallback((text: string) => {
+    const now = Date.now();
+    const normalized = normalizeText(text);
+    const next = recentChatSendsRef.current
+      .filter((entry) => now - entry.timestamp < 15000)
+      .concat({ text: normalized, timestamp: now });
+    recentChatSendsRef.current = next.slice(-10);
+  }, [normalizeText]);
+
+  const sendChat = useCallback(async (text: string, options?: SendTextOptions) => {
+    trackRecentSend(text);
+    return send(text, options);
+  }, [send, trackRecentSend]);
 
   const userTrackRef = useMemo(() => {
     return localParticipant ? {
@@ -93,7 +112,12 @@ function useUnifiedMessages() {
     });
 
     externalUserMessages.forEach((msg) => {
-      if (msg.text.trim()) {
+      if (!msg.text.trim()) return;
+      const normalized = normalizeText(msg.text);
+      const isDuplicate = recentChatSendsRef.current.some(
+        (entry) => entry.text === normalized && Math.abs(entry.timestamp - msg.timestamp) < 7000
+      );
+      if (!isDuplicate) {
         combined.push(msg);
       }
     });
@@ -109,7 +133,7 @@ function useUnifiedMessages() {
     });
   }, []);
 
-  return { unifiedMessages, send, addExternalUserMessage };
+  return { unifiedMessages, send: sendChat, addExternalUserMessage };
 }
 
 // ─────────────────────────────────────────
