@@ -11,7 +11,7 @@ function getErrorCode(err: unknown): string | undefined {
 function hasEnded(state: { endedAt?: bigint | number | string } | undefined): boolean {
   const endedAt = state?.endedAt;
   if (typeof endedAt === 'bigint') {
-    return endedAt > 0n;
+    return endedAt > BigInt(0);
   }
   if (typeof endedAt === 'number') {
     return endedAt > 0;
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     // Keep active dispatches to avoid client-side participant/track race conditions.
     // Only clear finished dispatches that can block new joins.
-    let dispatches = [];
+    let dispatches: any[] = [];
     try {
       dispatches = await dispatchClient.listDispatch(room);
     } catch (err: unknown) {
